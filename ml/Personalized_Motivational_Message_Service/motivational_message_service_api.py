@@ -1,0 +1,1167 @@
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Union
+import os
+import json
+import asyncio
+from datetime import datetime, timedelta
+import logging
+from pathlib import Path
+import requests
+import random
+import re
+from collections import defaultdict
+
+# Google Gemini imports
+from google import genai
+from google.genai import types
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Personalized Motivational Message Generation Service",
+    description="AI-powered personalized motivational messages for addiction recovery",
+    version="1.0.0"
+)
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create data directories
+MESSAGE_DATA_DIR = Path("message_data")
+MESSAGE_DATA_DIR.mkdir(exist_ok=True)
+
+TEMPLATES_DIR = Path("message_templates")
+TEMPLATES_DIR.mkdir(exist_ok=True)
+
+# Configuration
+CRAVING_API_BASE_URL = os.environ.get("CRAVING_API_URL", "http://localhost:8001")
+CHATBOT_API_BASE_URL = os.environ.get("CHATBOT_API_URL", "http://localhost:8002")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    logger.warning("GEMINI_API_KEY not found. AI enhancement will be disabled.")
+
+# Pydantic Models
+class UserProfile(BaseModel):
+    user_id: str
+    preferred_name: str = Field(..., description="How user likes to be addressed")
+    addiction_type: str = Field(..., description="Type of addiction")
+    days_in_recovery: int = Field(..., ge=0, description="Days in recovery")
+    communication_style: str = Field("balanced", description="tough_love/gentle/motivational/balanced/casual")
+    message_frequency: str = Field("daily", description="daily/weekly/on_demand")
+    preferred_message_length: str = Field("medium", description="short/medium/long")
+    preferred_tone: str = Field("encouraging", description="encouraging/realistic/spiritual/scientific")
+    timezone: str = Field("UTC", description="User timezone")
+    active_hours: List[int] = Field(default=[8, 12, 18], description="Preferred message delivery hours")
+    personal_goals: List[str] = Field(default=[], description="User's recovery goals")
+    trigger_themes: List[str] = Field(default=[], description="Common trigger topics")
+    success_themes: List[str] = Field(default=[], description="What motivates this user")
+
+class MessageRequest(BaseModel):
+    user_id: str
+    message_type: str = Field(..., description="daily/milestone/crisis/progress/custom")
+    context: Optional[Dict[str, Any]] = Field(None, description="Additional context for message generation")
+    delivery_time: Optional[datetime] = Field(None, description="When to deliver the message")
+    priority: str = Field("normal", description="low/normal/high/urgent")
+
+class PersonalizationData(BaseModel):
+    recent_craving_intensity: Optional[float] = None
+    stress_level_trend: Optional[str] = None  # improving/stable/declining
+    successful_interventions: List[str] = Field(default=[])
+    intervention_success_rates: Dict[str, float] = Field(default={})
+    emotional_patterns: List[str] = Field(default=[])
+    milestone_approaching: Optional[str] = None
+    recent_challenges: List[str] = Field(default=[])
+    recent_victories: List[str] = Field(default=[])
+    risk_periods_today: List[str] = Field(default=[])
+    progress_metrics: Dict[str, Any] = Field(default={})
+
+class GeneratedMessage(BaseModel):
+    message_id: str
+    user_id: str
+    content: str
+    message_type: str
+    personalization_score: float = Field(..., ge=0, le=1, description="How personalized the message is")
+    ai_enhanced: bool = Field(..., description="Whether AI enhancement was used")
+    delivery_recommendation: Dict[str, Any]
+    effectiveness_prediction: float = Field(..., ge=0, le=1, description="Predicted effectiveness")
+    generated_at: datetime
+    scheduled_delivery: Optional[datetime] = None
+
+class MessageFeedback(BaseModel):
+    message_id: str
+    user_id: str
+    was_helpful: bool
+    user_rating: Optional[float] = Field(None, ge=1, le=10, description="User rating 1-10")
+    user_engagement: str = Field(..., description="read/shared/saved/ignored")
+    emotional_response: Optional[str] = Field(None, description="User's emotional response")
+    notes: Optional[str] = None
+
+class MessageStats(BaseModel):
+    user_id: str
+    total_messages_sent: int
+    total_messages_read: int
+    average_rating: Optional[float]
+    most_effective_type: Optional[str]
+    least_effective_type: Optional[str]
+    engagement_trend: str  # improving/stable/declining
+    preferred_delivery_times: List[int]
+
+# Message Template System
+class MessageTemplateEngine:
+    def __init__(self):
+        self.templates = self._load_message_templates()
+        self._initialize_default_templates()
+    
+    def _load_message_templates(self) -> Dict[str, Any]:
+        """Load message templates from JSON files"""
+        template_file = TEMPLATES_DIR / "message_templates.json"
+        
+        if template_file.exists():
+            with open(template_file, "r") as f:
+                return json.load(f)
+        else:
+            return {}
+    
+    def _initialize_default_templates(self):
+        """Initialize default message templates"""
+        if not self.templates:
+            self.templates = {
+                "daily_morning": {
+                    "gentle": [
+                        "Good morning, {name}! 🌅 Today marks {days_sober} days of your healing journey. {strength_reminder} {today_context} Take it one moment at a time. {personal_goal}",
+                        "Rise and shine, {name}! ☀️ Another day to celebrate - {days_sober} days of choosing yourself. {progress_highlight} {encouragement} You've got this!",
+                        "Morning, {name}! 🌸 {days_sober} days of growth and courage. {recent_success} {gentle_reminder} Today is full of possibilities."
+                    ],
+                    "motivational": [
+                        "GOOD MORNING, CHAMPION! 💪 {name}, you've conquered {days_sober} days and you're not stopping now! {achievement_focus} {challenge_framing} {power_statement}",
+                        "Rise up, {name}! 🔥 Day {days_sober} of your comeback story. {strength_evidence} {today_opportunity} Make today count!",
+                        "Morning warrior, {name}! ⚡ {days_sober} days of pure determination. {victory_reminder} {challenge_ready} You're unstoppable!"
+                    ],
+                    "balanced": [
+                        "Good morning, {name}! 🌄 {days_sober} days into your recovery - that's real progress. {realistic_encouragement} {today_forecast} {balanced_goal}",
+                        "Morning, {name}! 🌱 Another day, another opportunity. You're {days_sober} days strong. {honest_progress} {practical_focus} {steady_encouragement}",
+                        "Hey {name}! 👋 Day {days_sober} of this journey. {progress_acknowledgment} {today_reality} {forward_focus}"
+                    ]
+                },
+                "milestone_celebration": {
+                    "weekly": [
+                        "🎉 WEEK COMPLETE! {name}, you've just finished another week of recovery! {week_highlights} {data_progress} {next_week_motivation}",
+                        "Seven more days in the books, {name}! 📚 {weekly_achievement} {growth_evidence} {momentum_building}",
+                        "Another week conquered, {name}! 🏆 {week_summary} {strength_building} {week_ahead_prep}"
+                    ],
+                    "monthly": [
+                        "🎊 MONTHLY MILESTONE REACHED! {name}, a whole month of recovery progress! {monthly_transformation} {data_celebration} {future_vision}",
+                        "One month milestone unlocked, {name}! 🔓 {month_journey} {achievement_analysis} {next_month_goals}",
+                        "30 days of victory, {name}! 🏅 {monthly_highlights} {personal_growth} {momentum_forward}"
+                    ],
+                    "major": [
+                        "🌟 MAJOR MILESTONE ALERT! {name}, you've reached {milestone_days} days! {epic_achievement} {transformation_story} {legacy_building}",
+                        "INCREDIBLE MILESTONE, {name}! 🎆 {milestone_days} days of pure determination! {journey_reflection} {impact_recognition} {future_possibilities}",
+                        "{milestone_days} DAYS OF FREEDOM! {name}, this is legendary! {milestone_celebration} {life_transformation} {inspiration_to_others}"
+                    ]
+                },
+                "crisis_support": [
+                    "Hey {name}, I know things feel overwhelming right now. {crisis_validation} But remember - you've overcome {past_challenges}. {immediate_support} {specific_action}",
+                    "{name}, this tough moment doesn't define you. {strength_reminder} You've used {effective_technique} successfully {success_count} times. {calming_guidance} {next_step}",
+                    "Breathe, {name}. {crisis_acknowledgment} Your {proven_strength} has carried you {days_sober} days. {immediate_tool} {support_reminder}"
+                ],
+                "progress_celebration": [
+                    "Progress alert, {name}! 📈 {specific_improvement} over the past {time_period}. {data_celebration} {growth_recognition} {momentum_encouragement}",
+                    "Look at you go, {name}! 🚀 {progress_metric} shows real improvement. {achievement_context} {skill_recognition} {forward_momentum}",
+                    "Amazing progress, {name}! ✨ {improvement_details} {personal_growth} {confidence_building} {next_level_prep}"
+                ],
+                "evening_reflection": [
+                    "Evening, {name}! 🌙 Day {days_sober} is almost complete. {day_acknowledgment} {evening_reflection} {tomorrow_prep} Rest well.",
+                    "Another day conquered, {name}! 🌆 {daily_victory} {evening_gratitude} {peaceful_closure} Sweet dreams.",
+                    "End of day check-in, {name}! 🌃 {day_summary} {evening_wisdom} {tomorrow_hope} Sleep peacefully."
+                ]
+            }
+            
+            # Save default templates
+            self._save_templates()
+    
+    def _save_templates(self):
+        """Save templates to file"""
+        template_file = TEMPLATES_DIR / "message_templates.json"
+        with open(template_file, "w") as f:
+            json.dump(self.templates, f, indent=2)
+    
+    def get_template(self, message_type: str, communication_style: str) -> str:
+        """Get appropriate template based on message type and user style"""
+        
+        # Map user styles to template categories
+        style_mapping = {
+            "tough_love": "motivational",
+            "gentle": "gentle", 
+            "motivational": "motivational",
+            "balanced": "balanced",
+            "casual": "balanced"
+        }
+        
+        template_style = style_mapping.get(communication_style, "balanced")
+        
+        # Get templates for message type
+        if message_type in self.templates:
+            if isinstance(self.templates[message_type], dict):
+                style_templates = self.templates[message_type].get(template_style, 
+                                 self.templates[message_type].get("balanced", []))
+            else:
+                style_templates = self.templates[message_type]
+            
+            if style_templates:
+                return random.choice(style_templates)
+        
+        # Fallback template
+        return "Hey {name}! Day {days_sober} of your recovery journey. {encouragement} Keep going strong!"
+
+# Personalization Engine
+class PersonalizationEngine:
+    def __init__(self):
+        self.user_data_cache = {}
+        self.effectiveness_data = defaultdict(list)
+    
+    async def get_user_personalization_data(self, user_id: str) -> PersonalizationData:
+        """Gather personalization data from all sources"""
+        
+        personalization_data = PersonalizationData()
+        
+        try:
+            # Get data from craving API
+            craving_data = await self._fetch_craving_data(user_id)
+            if craving_data:
+                personalization_data.recent_craving_intensity = craving_data.get("average_craving_intensity")
+                personalization_data.successful_interventions = craving_data.get("effective_interventions", [])
+                personalization_data.progress_metrics = craving_data.get("progress_metrics", {})
+            
+            # Get data from chatbot API  
+            chat_data = await self._fetch_chat_data(user_id)
+            if chat_data:
+                personalization_data.emotional_patterns = chat_data.get("recent_emotions", [])
+                personalization_data.recent_challenges = chat_data.get("discussed_challenges", [])
+                
+            # Calculate derived metrics
+            personalization_data.recent_victories = self._identify_recent_victories(craving_data, chat_data)
+            personalization_data.milestone_approaching = self._check_approaching_milestones(user_id)
+            personalization_data.risk_periods_today = self._get_todays_risk_periods(user_id)
+            
+        except Exception as e:
+            logger.error(f"Error gathering personalization data for {user_id}: {e}")
+        
+        return personalization_data
+    
+    async def _fetch_craving_data(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch data from craving forecasting API"""
+        try:
+            response = requests.get(f"{CRAVING_API_BASE_URL}/users/{user_id}/statistics", timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            logger.error(f"Error fetching craving data: {e}")
+        return None
+    
+    async def _fetch_chat_data(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch data from chatbot API"""
+        try:
+            response = requests.get(f"{CHATBOT_API_BASE_URL}/users/{user_id}/summary", timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            logger.error(f"Error fetching chat data: {e}")
+        return None
+    
+    def _identify_recent_victories(self, craving_data: Optional[Dict], chat_data: Optional[Dict]) -> List[str]:
+        """Identify recent victories from user data"""
+        victories = []
+        
+        if craving_data:
+            if craving_data.get("intervention_success_rate", 0) > 0.7:
+                victories.append("high_intervention_success")
+            if craving_data.get("stress_improvement", 0) > 0:
+                victories.append("stress_level_improvement")
+        
+        if chat_data:
+            positive_emotions = ["hope", "determination", "gratitude", "confidence"]
+            recent_emotions = chat_data.get("recent_emotions", [])
+            if any(emotion in recent_emotions for emotion in positive_emotions):
+                victories.append("positive_emotional_state")
+        
+        return victories
+    
+    def _check_approaching_milestones(self, user_id: str) -> Optional[str]:
+        """Check if user is approaching a milestone"""
+        try:
+            # This would typically fetch from user profile
+            # For now, return None - implement based on user profile data
+            return None
+        except:
+            return None
+    
+    def _get_todays_risk_periods(self, user_id: str) -> List[str]:
+        """Get today's predicted risk periods"""
+        try:
+            response = requests.post(f"{CRAVING_API_BASE_URL}/users/{user_id}/optimal-timing", 
+                                   json={"user_id": user_id}, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("critical_periods", [])
+        except:
+            return []
+    
+    def generate_personalized_content(self, user_profile: UserProfile, 
+                                    personalization_data: PersonalizationData) -> Dict[str, str]:
+        """Generate personalized content blocks"""
+        
+        content = {}
+        
+        # Strength reminders based on data
+        if personalization_data.successful_interventions:
+            top_intervention = personalization_data.successful_interventions[0]
+            content["strength_reminder"] = f"Your {top_intervention} technique has been your superpower."
+        else:
+            content["strength_reminder"] = "You've shown incredible resilience so far."
+        
+        # Progress highlights
+        if personalization_data.progress_metrics:
+            if "stress_improvement" in personalization_data.progress_metrics:
+                improvement = personalization_data.progress_metrics["stress_improvement"]
+                content["progress_highlight"] = f"Your stress levels have improved by {improvement}% recently."
+            else:
+                content["progress_highlight"] = "Every day of recovery is progress."
+        else:
+            content["progress_highlight"] = "You're building something amazing, one day at a time."
+        
+        # Recent success acknowledgment
+        if personalization_data.recent_victories:
+            victories_text = ", ".join(personalization_data.recent_victories)
+            content["recent_success"] = f"You've been showing {victories_text} - that's real growth!"
+        else:
+            content["recent_success"] = "Keep celebrating the small wins - they add up to big victories."
+        
+        # Today's context
+        if personalization_data.risk_periods_today:
+            content["today_context"] = "I see some challenging moments might come up today, but you're prepared."
+        else:
+            content["today_context"] = "Today's forecast looks calm - perfect for building positive momentum."
+        
+        # Personal goal connection
+        if user_profile.personal_goals:
+            goal = random.choice(user_profile.personal_goals)
+            content["personal_goal"] = f"Remember your goal: {goal}. You're moving closer every day."
+        else:
+            content["personal_goal"] = "Every step forward is a victory worth celebrating."
+        
+        # Crisis-specific content
+        if personalization_data.recent_craving_intensity and personalization_data.recent_craving_intensity > 7:
+            content["crisis_validation"] = "I know the cravings feel intense right now."
+            content["immediate_support"] = "But this feeling is temporary, and you are permanent."
+        
+        return content
+
+# AI Enhancement Engine using Google Gemini
+class AIEnhancementEngine:
+    def __init__(self):
+        self.client = None
+        if GEMINI_API_KEY:
+            self.client = genai.Client(api_key=GEMINI_API_KEY)
+    
+    async def enhance_message(self, base_message: str, user_profile: UserProfile, 
+                            personalization_data: PersonalizationData) -> str:
+        """Enhance message with AI for better personalization"""
+        
+        if not self.client:
+            logger.warning("Gemini client not available, returning base message")
+            return base_message
+        
+        try:
+            # Build comprehensive context for AI
+            context = self._build_ai_context(user_profile, personalization_data)
+            
+            prompt = f"""
+            Enhance this motivational recovery message to make it more personal, impactful, and authentic:
+            
+            Base message: "{base_message}"
+            
+            User context:
+            {context}
+            
+            Enhancement guidelines:
+            1. Make it feel like it's written specifically for this person
+            2. Reference their actual progress and data points naturally
+            3. Match their communication style: {user_profile.communication_style}
+            4. Keep the tone {user_profile.preferred_tone}
+            5. Include specific, actionable encouragement
+            6. Avoid generic motivational clichés
+            7. Keep it authentic and conversational
+            8. Maintain appropriate length: {user_profile.preferred_message_length}
+            
+            Return only the enhanced message, nothing else.
+            """
+            
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=prompt)]
+                )
+            ]
+            
+            config = types.GenerateContentConfig(
+                response_mime_type="text/plain",
+                temperature=0.7,
+                max_output_tokens=300
+            )
+            
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
+                model="gemini-2.0-flash",
+                contents=contents,
+                config=config
+            )
+            
+            enhanced_message = response.text.strip()
+            
+            # Validate enhanced message isn't too different or problematic
+            if len(enhanced_message) > 1000:  # Too long
+                return base_message
+            if not enhanced_message:  # Empty response
+                return base_message
+                
+            return enhanced_message
+            
+        except Exception as e:
+            logger.error(f"AI enhancement failed: {e}")
+            return base_message
+    
+    def _build_ai_context(self, user_profile: UserProfile, personalization_data: PersonalizationData) -> str:
+        """Build context string for AI enhancement"""
+        context_parts = []
+        
+        # User profile context
+        context_parts.append(f"User name: {user_profile.preferred_name}")
+        context_parts.append(f"Days in recovery: {user_profile.days_in_recovery}")
+        context_parts.append(f"Addiction type: {user_profile.addiction_type}")
+        
+        # Recent data context
+        if personalization_data.recent_craving_intensity:
+            context_parts.append(f"Recent craving intensity: {personalization_data.recent_craving_intensity}/10")
+        
+        if personalization_data.successful_interventions:
+            context_parts.append(f"Successful interventions: {', '.join(personalization_data.successful_interventions)}")
+        
+        if personalization_data.recent_victories:
+            context_parts.append(f"Recent victories: {', '.join(personalization_data.recent_victories)}")
+        
+        if personalization_data.emotional_patterns:
+            context_parts.append(f"Recent emotional patterns: {', '.join(personalization_data.emotional_patterns)}")
+        
+        return "\n".join(context_parts)
+
+# Message Generation Engine (Main orchestrator)
+class MessageGenerationEngine:
+    def __init__(self):
+        self.template_engine = MessageTemplateEngine()
+        self.personalization_engine = PersonalizationEngine()
+        self.ai_engine = AIEnhancementEngine()
+    
+    async def generate_message(self, user_profile: UserProfile, message_type: str, 
+                             context: Optional[Dict[str, Any]] = None) -> GeneratedMessage:
+        """Generate a complete personalized message"""
+        
+        # Step 1: Gather personalization data
+        personalization_data = await self.personalization_engine.get_user_personalization_data(user_profile.user_id)
+        
+        # Step 2: Get appropriate template
+        template = self.template_engine.get_template(message_type, user_profile.communication_style)
+        
+        # Step 3: Generate personalized content blocks
+        personal_content = self.personalization_engine.generate_personalized_content(
+            user_profile, personalization_data
+        )
+        
+        # Step 4: Prepare template variables
+        template_vars = {
+            "name": user_profile.preferred_name,
+            "days_sober": user_profile.days_in_recovery,
+            **personal_content
+        }
+        
+        # Add context-specific variables
+        if context:
+            template_vars.update(context)
+        
+        # Step 5: Generate base message
+        try:
+            base_message = template.format(**template_vars)
+        except KeyError as e:
+            logger.warning(f"Template formatting error: {e}, using fallback")
+            base_message = f"Hi {user_profile.preferred_name}! Day {user_profile.days_in_recovery} of your recovery journey. You're doing amazing - keep going strong!"
+        
+        # Step 6: AI enhancement (if available)
+        ai_enhanced = False
+        final_message = base_message
+        
+        if self.ai_engine.client:
+            try:
+                final_message = await self.ai_engine.enhance_message(
+                    base_message, user_profile, personalization_data
+                )
+                ai_enhanced = True
+            except Exception as e:
+                logger.error(f"AI enhancement failed: {e}")
+                final_message = base_message
+        
+        # Step 7: Calculate metrics
+        personalization_score = self._calculate_personalization_score(personalization_data, personal_content)
+        effectiveness_prediction = self._predict_effectiveness(user_profile, message_type, personalization_score)
+        
+        # Step 8: Generate delivery recommendation
+        delivery_recommendation = self._generate_delivery_recommendation(user_profile, message_type)
+        
+        # Step 9: Create message object
+        message_id = f"{user_profile.user_id}_{message_type}_{int(datetime.now().timestamp())}"
+        
+        generated_message = GeneratedMessage(
+            message_id=message_id,
+            user_id=user_profile.user_id,
+            content=final_message,
+            message_type=message_type,
+            personalization_score=personalization_score,
+            ai_enhanced=ai_enhanced,
+            delivery_recommendation=delivery_recommendation,
+            effectiveness_prediction=effectiveness_prediction,
+            generated_at=datetime.now()
+        )
+        
+        return generated_message
+    
+    def _calculate_personalization_score(self, personalization_data: PersonalizationData, 
+                                       personal_content: Dict[str, str]) -> float:
+        """Calculate how personalized the message is (0-1 scale)"""
+        score = 0.0
+        
+        # Base score for having personalization data
+        if personalization_data.recent_craving_intensity is not None:
+            score += 0.2
+        if personalization_data.successful_interventions:
+            score += 0.2
+        if personalization_data.recent_victories:
+            score += 0.2
+        if personalization_data.emotional_patterns:
+            score += 0.2
+        if personalization_data.progress_metrics:
+            score += 0.2
+        
+        return min(score, 1.0)
+    
+    def _predict_effectiveness(self, user_profile: UserProfile, message_type: str, 
+                             personalization_score: float) -> float:
+        """Predict message effectiveness based on user profile and personalization"""
+        base_effectiveness = 0.6  # Base effectiveness
+        
+        # Adjust based on personalization score
+        effectiveness = base_effectiveness + (personalization_score * 0.3)
+        
+        # Adjust based on message type preferences
+        if message_type == "daily" and user_profile.message_frequency == "daily":
+            effectiveness += 0.1
+        elif message_type == "milestone":
+            effectiveness += 0.15  # Milestone messages generally more effective
+        
+        return min(effectiveness, 1.0)
+    
+    def _generate_delivery_recommendation(self, user_profile: UserProfile, 
+                                        message_type: str) -> Dict[str, Any]:
+        """Generate delivery time recommendation"""
+        
+        current_hour = datetime.now().hour
+        
+        # Default delivery times based on message type
+        if message_type == "daily_morning":
+            recommended_hours = [h for h in user_profile.active_hours if h <= 10]
+        elif message_type == "evening_reflection":
+            recommended_hours = [h for h in user_profile.active_hours if h >= 18]
+        else:
+            recommended_hours = user_profile.active_hours
+        
+        if not recommended_hours:
+            recommended_hours = [9, 14, 19]  # Default times
+        
+        # Find next optimal delivery time
+        next_optimal = None
+        for hour in sorted(recommended_hours):
+            if hour > current_hour:
+                next_optimal = datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0)
+                break
+        
+        if not next_optimal:
+            # Next day
+            tomorrow = datetime.now() + timedelta(days=1)
+            next_optimal = tomorrow.replace(hour=recommended_hours[0], minute=0, second=0, microsecond=0)
+        
+        return {
+            "optimal_delivery_time": next_optimal.isoformat(),
+            "recommended_hours": recommended_hours,
+            "timezone": user_profile.timezone,
+            "immediate_delivery_ok": message_type in ["crisis", "urgent"]
+        }
+
+# Data Management
+class MessageDataManager:
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+    
+    def save_user_profile(self, profile: UserProfile):
+        """Save user profile"""
+        user_dir = self.data_dir / profile.user_id
+        user_dir.mkdir(exist_ok=True)
+        
+        with open(user_dir / "profile.json", "w") as f:
+            json.dump(profile.dict(), f, indent=2, default=str)
+    
+    def load_user_profile(self, user_id: str) -> Optional[UserProfile]:
+        """Load user profile"""
+        try:
+            user_dir = self.data_dir / user_id
+            with open(user_dir / "profile.json", "r") as f:
+                data = json.load(f)
+                return UserProfile(**data)
+        except FileNotFoundError:
+            return None
+    
+    def save_generated_message(self, message: GeneratedMessage):
+        """Save generated message"""
+        user_dir = self.data_dir / message.user_id
+        user_dir.mkdir(exist_ok=True)
+        
+        messages_file = user_dir / "generated_messages.json"
+        
+        # Load existing messages
+        messages = []
+        if messages_file.exists():
+            with open(messages_file, "r") as f:
+                messages = json.load(f)
+        
+        # Add new message
+        messages.append(message.dict())
+        
+        # Keep only last 100 messages
+        if len(messages) > 100:
+            messages = messages[-100:]
+        
+        # Save updated messages
+        with open(messages_file, "w") as f:
+            json.dump(messages, f, indent=2, default=str)
+    
+    def save_message_feedback(self, feedback: MessageFeedback):
+        """Save message feedback"""
+        user_dir = self.data_dir / feedback.user_id
+        user_dir.mkdir(exist_ok=True)
+        
+        feedback_file = user_dir / "message_feedback.json"
+        
+        # Load existing feedback
+        feedback_list = []
+        if feedback_file.exists():
+            with open(feedback_file, "r") as f:
+                feedback_list = json.load(f)
+        
+        # Add new feedback
+        feedback_list.append(feedback.dict())
+        
+        # Save updated feedback
+        with open(feedback_file, "w") as f:
+            json.dump(feedback_list, f, indent=2, default=str)
+    
+    def get_message_stats(self, user_id: str) -> MessageStats:
+        """Calculate message statistics for user"""
+        
+        # Load messages and feedback
+        user_dir = self.data_dir / user_id
+        
+        messages = []
+        feedback = []
+        
+        try:
+            messages_file = user_dir / "generated_messages.json"
+            if messages_file.exists():
+                with open(messages_file, "r") as f:
+                    messages = json.load(f)
+            
+            feedback_file = user_dir / "message_feedback.json"
+            if feedback_file.exists():
+                with open(feedback_file, "r") as f:
+                    feedback = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading user data: {e}")
+        
+        # Calculate statistics
+        total_sent = len(messages)
+        total_read = len([f for f in feedback if f["user_engagement"] != "ignored"])
+        
+        # Calculate average rating
+        ratings = [f["user_rating"] for f in feedback if f.get("user_rating")]
+        average_rating = sum(ratings) / len(ratings) if ratings else None
+        
+        # Find most/least effective message types
+        type_effectiveness = defaultdict(list)
+        for f in feedback:
+            if f.get("user_rating"):
+                message_type = next((m["message_type"] for m in messages if m["message_id"] == f["message_id"]), None)
+                if message_type:
+                    type_effectiveness[message_type].append(f["user_rating"])
+        
+        most_effective = None
+        least_effective = None
+        if type_effectiveness:
+            avg_by_type = {t: sum(ratings)/len(ratings) for t, ratings in type_effectiveness.items()}
+            most_effective = max(avg_by_type, key=avg_by_type.get)
+            least_effective = min(avg_by_type, key=avg_by_type.get)
+        
+        # Calculate engagement trend (simple: last 10 vs previous 10)
+        recent_feedback = feedback[-10:] if len(feedback) >= 10 else feedback
+        older_feedback = feedback[-20:-10] if len(feedback) >= 20 else []
+        
+        recent_engagement = sum(1 for f in recent_feedback if f["user_engagement"] != "ignored")
+        older_engagement = sum(1 for f in older_feedback if f["user_engagement"] != "ignored")
+        
+        if older_engagement > 0:
+            engagement_ratio = recent_engagement / max(older_engagement, 1)
+            if engagement_ratio > 1.1:
+                engagement_trend = "improving"
+            elif engagement_ratio < 0.9:
+                engagement_trend = "declining"
+            else:
+                engagement_trend = "stable"
+        else:
+            engagement_trend = "new_user"
+        
+        # Preferred delivery times (from successful messages)
+        successful_messages = [m for m in messages if any(f["message_id"] == m["message_id"] and f["was_helpful"] for f in feedback)]
+        delivery_hours = []
+        for msg in successful_messages:
+            try:
+                delivery_time = datetime.fromisoformat(msg["generated_at"])
+                delivery_hours.append(delivery_time.hour)
+            except:
+                continue
+        
+        preferred_times = list(set(delivery_hours)) if delivery_hours else [9, 14, 19]
+        
+        return MessageStats(
+            user_id=user_id,
+            total_messages_sent=total_sent,
+            total_messages_read=total_read,
+            average_rating=average_rating,
+            most_effective_type=most_effective,
+            least_effective_type=least_effective,
+            engagement_trend=engagement_trend,
+            preferred_delivery_times=preferred_times
+        )
+
+# Initialize components
+message_engine = MessageGenerationEngine()
+data_manager = MessageDataManager(MESSAGE_DATA_DIR)
+
+# API Endpoints
+@app.get("/")
+async def root():
+    return {
+        "message": "Personalized Motivational Message Generation Service",
+        "version": "1.0.0",
+        "features": [
+            "AI-powered message personalization",
+            "Template-based message generation",
+            "User profile management",
+            "Message effectiveness tracking",
+            "Integration with craving and chatbot APIs",
+            "Optimal delivery timing"
+        ],
+        "endpoints": {
+            "generate_message": "/generate-message",
+            "user_profile": "/users/{user_id}/profile",
+            "message_feedback": "/users/{user_id}/feedback",
+            "message_stats": "/users/{user_id}/stats",
+            "health": "/health"
+        }
+    }
+
+@app.post("/generate-message", response_model=GeneratedMessage)
+async def generate_motivational_message(request: MessageRequest, background_tasks: BackgroundTasks):
+    """Generate a personalized motivational message"""
+    try:
+        # Load user profile
+        user_profile = data_manager.load_user_profile(request.user_id)
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found. Please create profile first.")
+        
+        # Generate message
+        generated_message = await message_engine.generate_message(
+            user_profile, 
+            request.message_type, 
+            request.context
+        )
+        
+        # Set scheduled delivery if specified
+        if request.delivery_time:
+            generated_message.scheduled_delivery = request.delivery_time
+        
+        # Save message in background
+        background_tasks.add_task(data_manager.save_generated_message, generated_message)
+        
+        return generated_message
+        
+    except Exception as e:
+        logger.error(f"Error generating message: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating message: {str(e)}")
+
+@app.post("/users/{user_id}/profile")
+async def create_or_update_user_profile(user_id: str, profile_data: Dict[str, Any]):
+    """Create or update user profile"""
+    try:
+        profile_data["user_id"] = user_id
+        profile = UserProfile(**profile_data)
+        data_manager.save_user_profile(profile)
+        return {"message": "Profile saved successfully", "user_id": user_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error saving profile: {str(e)}")
+
+@app.get("/users/{user_id}/profile")
+async def get_user_profile(user_id: str):
+    """Get user profile"""
+    profile = data_manager.load_user_profile(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    return profile
+
+@app.post("/users/{user_id}/feedback")
+async def submit_message_feedback(user_id: str, feedback: MessageFeedback):
+    """Submit feedback for a message"""
+    try:
+        feedback.user_id = user_id
+        data_manager.save_message_feedback(feedback)
+        return {"message": "Feedback saved successfully", "message_id": feedback.message_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving feedback: {str(e)}")
+
+@app.get("/users/{user_id}/stats", response_model=MessageStats)
+async def get_user_message_stats(user_id: str):
+    """Get message statistics for user"""
+    try:
+        stats = data_manager.get_message_stats(user_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting stats: {str(e)}")
+
+@app.get("/users/{user_id}/messages")
+async def get_user_messages(user_id: str, limit: int = 10, message_type: Optional[str] = None):
+    """Get recent messages for user"""
+    try:
+        user_dir = MESSAGE_DATA_DIR / user_id
+        messages_file = user_dir / "generated_messages.json"
+        
+        if not messages_file.exists():
+            return {"messages": [], "count": 0}
+        
+        with open(messages_file, "r") as f:
+            messages = json.load(f)
+        
+        # Filter by message type if specified
+        if message_type:
+            messages = [m for m in messages if m["message_type"] == message_type]
+        
+        # Sort by generation time (newest first) and limit
+        messages.sort(key=lambda x: x["generated_at"], reverse=True)
+        messages = messages[:limit]
+        
+        return {"messages": messages, "count": len(messages)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting messages: {str(e)}")
+
+# Batch message generation endpoints
+@app.post("/generate-daily-messages")
+async def generate_daily_messages_batch(user_ids: List[str], background_tasks: BackgroundTasks):
+    """Generate daily messages for multiple users"""
+    try:
+        results = []
+        
+        for user_id in user_ids:
+            try:
+                user_profile = data_manager.load_user_profile(user_id)
+                if not user_profile:
+                    results.append({"user_id": user_id, "status": "error", "message": "Profile not found"})
+                    continue
+                
+                # Generate morning message
+                message = await message_engine.generate_message(user_profile, "daily_morning")
+                
+                # Save message in background
+                background_tasks.add_task(data_manager.save_generated_message, message)
+                
+                results.append({
+                    "user_id": user_id, 
+                    "status": "success", 
+                    "message_id": message.message_id,
+                    "delivery_time": message.delivery_recommendation["optimal_delivery_time"]
+                })
+                
+            except Exception as e:
+                results.append({"user_id": user_id, "status": "error", "message": str(e)})
+        
+        return {"results": results, "total_processed": len(user_ids)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in batch generation: {str(e)}")
+
+@app.post("/generate-milestone-message")
+async def generate_milestone_message(user_id: str, milestone_type: str, milestone_value: int):
+    """Generate milestone celebration message"""
+    try:
+        user_profile = data_manager.load_user_profile(user_id)
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        # Update recovery days if this is a days milestone
+        if milestone_type == "days":
+            user_profile.days_in_recovery = milestone_value
+            data_manager.save_user_profile(user_profile)
+        
+        # Create milestone context
+        milestone_context = {
+            "milestone_type": milestone_type,
+            "milestone_value": milestone_value,
+            "milestone_days": milestone_value if milestone_type == "days" else user_profile.days_in_recovery
+        }
+        
+        # Determine milestone message type
+        if milestone_value in [7, 14, 21, 28]:  # Weekly milestones
+            message_type = "milestone_weekly"
+        elif milestone_value in [30, 60, 90, 180, 365]:  # Major milestones
+            message_type = "milestone_major"
+        else:
+            message_type = "milestone_celebration"
+        
+        message = await message_engine.generate_message(
+            user_profile, 
+            message_type, 
+            milestone_context
+        )
+        
+        # Save message
+        data_manager.save_generated_message(message)
+        
+        return message
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating milestone message: {str(e)}")
+
+@app.post("/generate-crisis-support-message")
+async def generate_crisis_support_message(user_id: str, crisis_context: Dict[str, Any]):
+    """Generate crisis support message"""
+    try:
+        user_profile = data_manager.load_user_profile(user_id)
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        message = await message_engine.generate_message(
+            user_profile, 
+            "crisis_support", 
+            crisis_context
+        )
+        
+        # Crisis messages should be delivered immediately
+        message.delivery_recommendation["immediate_delivery_ok"] = True
+        message.scheduled_delivery = datetime.now()
+        
+        # Save message
+        data_manager.save_generated_message(message)
+        
+        return message
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating crisis message: {str(e)}")
+
+# Integration endpoints
+@app.post("/webhook/high-risk-detected")
+async def handle_high_risk_webhook(user_id: str, risk_data: Dict[str, Any]):
+    """Webhook for high-risk period detection from craving API"""
+    try:
+        user_profile = data_manager.load_user_profile(user_id)
+        if not user_profile:
+            logger.warning(f"High risk detected for user {user_id} but no profile found")
+            return {"status": "user_not_found"}
+        
+        # Generate supportive message for high-risk period
+        risk_context = {
+            "risk_level": risk_data.get("risk_level", "high"),
+            "predicted_intensity": risk_data.get("predicted_intensity", 8.0),
+            "time_until_risk": risk_data.get("time_until_risk", "soon"),
+            "effective_interventions": risk_data.get("suggested_interventions", [])
+        }
+        
+        message = await message_engine.generate_message(
+            user_profile,
+            "crisis_support",
+            risk_context
+        )
+        
+        # Save and potentially trigger immediate delivery
+        data_manager.save_generated_message(message)
+        
+        logger.info(f"Generated high-risk support message for user {user_id}")
+        
+        return {
+            "status": "message_generated",
+            "message_id": message.message_id,
+            "immediate_delivery": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error handling high-risk webhook: {e}")
+        raise HTTPException(status_code=500, detail=f"Error handling webhook: {str(e)}")
+
+@app.post("/webhook/milestone-achieved")
+async def handle_milestone_webhook(user_id: str, milestone_data: Dict[str, Any]):
+    """Webhook for milestone achievements"""
+    try:
+        milestone_type = milestone_data.get("milestone_type", "days")
+        milestone_value = milestone_data.get("milestone_value", 1)
+        
+        message = await generate_milestone_message(user_id, milestone_type, milestone_value)
+        
+        return {
+            "status": "milestone_message_generated",
+            "message_id": message.message_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error handling milestone webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+# Analytics and insights
+@app.get("/analytics/message-effectiveness")
+async def get_message_effectiveness_analytics(days: int = 30):
+    """Get message effectiveness analytics across all users"""
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        all_feedback = []
+        all_messages = []
+        
+        # Collect data from all users
+        for user_dir in MESSAGE_DATA_DIR.glob("*"):
+            if user_dir.is_dir():
+                # Load feedback
+                feedback_file = user_dir / "message_feedback.json"
+                if feedback_file.exists():
+                    with open(feedback_file, "r") as f:
+                        user_feedback = json.load(f)
+                        all_feedback.extend(user_feedback)
+                
+                # Load messages
+                messages_file = user_dir / "generated_messages.json"
+                if messages_file.exists():
+                    with open(messages_file, "r") as f:
+                        user_messages = json.load(f)
+                        all_messages.extend(user_messages)
+        
+        # Filter by date
+        recent_feedback = [
+            f for f in all_feedback 
+            if datetime.fromisoformat(f.get("timestamp", "1970-01-01")) >= cutoff_date
+        ]
+        
+        # Calculate analytics
+        total_messages = len(all_messages)
+        total_feedback = len(recent_feedback)
+        
+        if total_feedback == 0:
+            return {"message": "No feedback data available"}
+        
+        # Message type effectiveness
+        type_stats = defaultdict(lambda: {"ratings": [], "engagement": []})
+        
+        for feedback in recent_feedback:
+            message_id = feedback["message_id"]
+            message = next((m for m in all_messages if m["message_id"] == message_id), None)
+            
+            if message:
+                message_type = message["message_type"]
+                if feedback.get("user_rating"):
+                    type_stats[message_type]["ratings"].append(feedback["user_rating"])
+                type_stats[message_type]["engagement"].append(feedback["user_engagement"])
+        
+        # Calculate averages
+        effectiveness_by_type = {}
+        for msg_type, stats in type_stats.items():
+            ratings = stats["ratings"]
+            engagements = stats["engagement"]
+            
+            avg_rating = sum(ratings) / len(ratings) if ratings else 0
+            engagement_rate = len([e for e in engagements if e != "ignored"]) / len(engagements) if engagements else 0
+            
+            effectiveness_by_type[msg_type] = {
+                "average_rating": round(avg_rating, 2),
+                "engagement_rate": round(engagement_rate, 2),
+                "total_messages": len(engagements)
+            }
+        
+        return {
+            "analysis_period_days": days,
+            "total_messages_analyzed": total_messages,
+            "total_feedback_received": total_feedback,
+            "effectiveness_by_type": effectiveness_by_type,
+            "overall_engagement_rate": round(len([f for f in recent_feedback if f["user_engagement"] != "ignored"]) / total_feedback, 2),
+            "overall_average_rating": round(sum(f["user_rating"] for f in recent_feedback if f.get("user_rating")) / len([f for f in recent_feedback if f.get("user_rating")]), 2) if any(f.get("user_rating") for f in recent_feedback) else 0
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating analytics: {str(e)}")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    
+    # Check AI integration
+    ai_status = "connected" if GEMINI_API_KEY and message_engine.ai_engine.client else "not_configured"
+    
+    # Check external API connections
+    craving_api_status = "unknown"
+    chatbot_api_status = "unknown"
+    
+    try:
+        response = requests.get(f"{CRAVING_API_BASE_URL}/health", timeout=3)
+        craving_api_status = "connected" if response.status_code == 200 else "error"
+    except:
+        craving_api_status = "unreachable"
+    
+    try:
+        response = requests.get(f"{CHATBOT_API_BASE_URL}/health", timeout=3)
+        chatbot_api_status = "connected" if response.status_code == 200 else "error"
+    except:
+        chatbot_api_status = "unreachable"
+    
+    # Count active users
+    active_users = len(list(MESSAGE_DATA_DIR.glob("*")))
+    
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Personalized Motivational Message Generation Service",
+        "version": "1.0.0",
+        "integrations": {
+            "google_gemini": ai_status,
+            "craving_api": craving_api_status,
+            "chatbot_api": chatbot_api_status
+        },
+        "features_available": {
+            "ai_enhancement": ai_status == "connected",
+            "template_generation": True,
+            "personalization": True,
+            "effectiveness_tracking": True,
+            "external_data_integration": craving_api_status == "connected" or chatbot_api_status == "connected"
+        },
+        "active_users": active_users,
+        "message_types": ["daily_morning", "milestone_celebration", "crisis_support", "progress_celebration", "evening_reflection"]
+    }

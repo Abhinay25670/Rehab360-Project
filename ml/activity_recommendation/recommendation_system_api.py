@@ -1,0 +1,624 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from datetime import datetime, time
+from typing import List, Dict, Optional, Any
+import random
+from enum import Enum
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Personalized Activity Recommendation API",
+    description="Get personalized activity suggestions based on mood, time, and preferences",
+    version="1.0.0"
+)
+
+# Enums for validation
+class MoodType(str, Enum):
+    depressed = "depressed"
+    anxious = "anxious"
+    energetic = "energetic"
+    neutral = "neutral"
+    overwhelmed = "overwhelmed"
+    lonely = "lonely"
+    angry = "angry"
+    grateful = "grateful"
+
+class EnergyLevel(str, Enum):
+    very_low = "very_low"
+    low = "low"
+    medium = "medium"
+    high = "high"
+    very_high = "very_high"
+
+class LocationType(str, Enum):
+    home = "home"
+    outdoor = "outdoor"
+    gym = "gym"
+    social_space = "social_space"
+    work = "work"
+    anywhere = "anywhere"
+
+# Request models
+class ActivityRequest(BaseModel):
+    mood: MoodType
+    current_time: Optional[str] = None  # ISO format or just hour (e.g., "14:30" or "14")
+    energy_level: Optional[EnergyLevel] = EnergyLevel.medium
+    location: Optional[LocationType] = LocationType.anywhere
+    preferences: Optional[List[str]] = []  # e.g., ["indoor", "solo", "creative"]
+    duration_available: Optional[int] = 30  # minutes
+    user_id: Optional[str] = None
+
+# Response models
+class ActivityDetails(BaseModel):
+    title: str
+    description: str
+    duration_min: int
+    duration_max: int
+    energy_required: EnergyLevel
+    location: LocationType
+    materials: List[str]
+    instructions: str
+    benefits: List[str]
+    recovery_value: str
+    difficulty: str
+
+class ActivityRecommendation(BaseModel):
+    activity_id: str
+    score: float
+    match_reasons: List[str]
+    details: ActivityDetails
+
+class RecommendationResponse(BaseModel):
+    recommendations: List[ActivityRecommendation]
+    total_found: int
+    mood_context: Dict[str, Any]
+    time_context: Dict[str, Any]
+    personalization_notes: List[str]
+
+# Evidence-based activity database from behavioral activation therapy
+ACTIVITY_DATABASE = {
+    # SELF-CARE ACTIVITIES
+    "gentle_walk": {
+        "title": "Gentle Nature Walk",
+        "description": "A slow, mindful walk to boost mood and get fresh air",
+        "duration_min": 15, "duration_max": 45,
+        "energy_required": "low", "location": "outdoor",
+        "materials": ["comfortable_shoes", "weather_appropriate_clothing"],
+        "instructions": "Take a slow walk outside, focusing on your surroundings. Notice trees, sounds, and fresh air. Walk at your own pace without pressure.",
+        "benefits": ["mood_boost", "fresh_air", "light_exercise", "mindfulness"],
+        "recovery_value": "high", "difficulty": "easy",
+        "mood_targets": ["depressed", "anxious", "overwhelmed"],
+        "time_periods": ["morning", "afternoon", "evening"],
+        "tags": ["outdoor", "solo", "movement", "nature"]
+    },
+    
+    "journaling": {
+        "title": "Reflective Journaling",
+        "description": "Write about thoughts, feelings, and experiences",
+        "duration_min": 10, "duration_max": 30,
+        "energy_required": "very_low", "location": "anywhere",
+        "materials": ["notebook", "pen", "quiet_space"],
+        "instructions": "Write freely about how you're feeling, what you're grateful for, or what's on your mind. No judgment, just expression.",
+        "benefits": ["emotional_processing", "self_reflection", "stress_relief", "clarity"],
+        "recovery_value": "very_high", "difficulty": "easy",
+        "mood_targets": ["depressed", "anxious", "overwhelmed", "angry"],
+        "time_periods": ["morning", "evening"],
+        "tags": ["indoor", "solo", "creative", "therapeutic"]
+    },
+    
+    "breathing_exercise": {
+        "title": "Deep Breathing Exercise",
+        "description": "Calming breath work to reduce anxiety and center yourself",
+        "duration_min": 5, "duration_max": 15,
+        "energy_required": "very_low", "location": "anywhere",
+        "materials": ["quiet_space"],
+        "instructions": "Sit comfortably. Breathe in for 4 counts, hold for 4, exhale for 6. Repeat 10-15 times, focusing only on your breath.",
+        "benefits": ["anxiety_reduction", "stress_relief", "focus", "calm"],
+        "recovery_value": "high", "difficulty": "easy",
+        "mood_targets": ["anxious", "overwhelmed", "angry"],
+        "time_periods": ["morning", "midday", "afternoon", "evening"],
+        "tags": ["indoor", "solo", "mindfulness", "quick"]
+    },
+    
+    # PHYSICAL ACTIVITIES
+    "workout": {
+        "title": "Energizing Workout",
+        "description": "Physical exercise to channel energy and boost endorphins",
+        "duration_min": 20, "duration_max": 60,
+        "energy_required": "high", "location": "gym",
+        "materials": ["workout_clothes", "water", "exercise_equipment"],
+        "instructions": "Engage in your preferred form of exercise - running, weightlifting, yoga, or cardio. Start with warm-up and listen to your body.",
+        "benefits": ["endorphin_release", "energy_outlet", "physical_health", "confidence"],
+        "recovery_value": "high", "difficulty": "moderate",
+        "mood_targets": ["energetic", "angry", "depressed"],
+        "time_periods": ["morning", "afternoon"],
+        "tags": ["physical", "energizing", "health", "solo"]
+    },
+    
+    "yoga": {
+        "title": "Gentle Yoga Session",
+        "description": "Mindful movement combining breath and gentle stretches",
+        "duration_min": 15, "duration_max": 45,
+        "energy_required": "low", "location": "home",
+        "materials": ["yoga_mat", "comfortable_clothes"],
+        "instructions": "Follow a gentle yoga routine focusing on breath and movement. Include child's pose, cat-cow, and gentle twists.",
+        "benefits": ["flexibility", "mindfulness", "stress_relief", "body_awareness"],
+        "recovery_value": "high", "difficulty": "easy",
+        "mood_targets": ["anxious", "depressed", "overwhelmed"],
+        "time_periods": ["morning", "evening"],
+        "tags": ["indoor", "solo", "movement", "mindfulness"]
+    },
+    
+    # SOCIAL ACTIVITIES
+    "call_friend": {
+        "title": "Connect with a Friend",
+        "description": "Reach out to someone you care about for social connection",
+        "duration_min": 15, "duration_max": 60,
+        "energy_required": "medium", "location": "anywhere",
+        "materials": ["phone", "contact_list"],
+        "instructions": "Call, text, or video chat with a friend or family member. Share how you're doing or just catch up on their life.",
+        "benefits": ["social_connection", "support", "perspective", "belonging"],
+        "recovery_value": "very_high", "difficulty": "moderate",
+        "mood_targets": ["lonely", "depressed", "overwhelmed"],
+        "time_periods": ["afternoon", "evening"],
+        "tags": ["social", "connection", "support", "communication"]
+    },
+    
+    "meet_for_coffee": {
+        "title": "Coffee Date with Friend",
+        "description": "Meet someone in person for social connection and support",
+        "duration_min": 30, "duration_max": 90,
+        "energy_required": "medium", "location": "social_space",
+        "materials": ["transportation", "spending_money"],
+        "instructions": "Arrange to meet a friend at a café or restaurant. Focus on being present and enjoying their company.",
+        "benefits": ["social_connection", "routine", "environmental_change", "support"],
+        "recovery_value": "very_high", "difficulty": "moderate",
+        "mood_targets": ["lonely", "depressed"],
+        "time_periods": ["morning", "afternoon"],
+        "tags": ["social", "outdoor", "connection", "routine"]
+    },
+    
+    # CREATIVE ACTIVITIES
+    "art_creation": {
+        "title": "Creative Art Session",
+        "description": "Express yourself through drawing, painting, or crafts",
+        "duration_min": 20, "duration_max": 120,
+        "energy_required": "medium", "location": "home",
+        "materials": ["art_supplies", "paper", "creative_materials"],
+        "instructions": "Create something with your hands - draw, paint, craft, or build. Focus on the process, not the outcome.",
+        "benefits": ["self_expression", "focus", "accomplishment", "creativity"],
+        "recovery_value": "high", "difficulty": "easy",
+        "mood_targets": ["depressed", "anxious", "energetic"],
+        "time_periods": ["afternoon", "evening"],
+        "tags": ["creative", "indoor", "solo", "expressive"]
+    },
+    
+    "music_listening": {
+        "title": "Mindful Music Session",
+        "description": "Listen to music that matches or improves your mood",
+        "duration_min": 10, "duration_max": 45,
+        "energy_required": "very_low", "location": "anywhere",
+        "materials": ["music_device", "headphones_optional"],
+        "instructions": "Choose music that resonates with you. Listen mindfully, focusing on instruments, lyrics, or how it makes you feel.",
+        "benefits": ["mood_regulation", "emotional_expression", "relaxation", "inspiration"],
+        "recovery_value": "medium", "difficulty": "easy",
+        "mood_targets": ["depressed", "anxious", "energetic", "angry"],
+        "time_periods": ["morning", "midday", "afternoon", "evening"],
+        "tags": ["indoor", "solo", "emotional", "quick"]
+    },
+    
+    # PRODUCTIVE ACTIVITIES
+    "organize_space": {
+        "title": "Organize Living Space",
+        "description": "Tidy up your environment for mental clarity",
+        "duration_min": 15, "duration_max": 60,
+        "energy_required": "medium", "location": "home",
+        "materials": ["cleaning_supplies", "organizational_tools"],
+        "instructions": "Choose one area to organize - desk, bedroom, or kitchen. Sort, clean, and arrange items mindfully.",
+        "benefits": ["accomplishment", "control", "clarity", "environment_improvement"],
+        "recovery_value": "medium", "difficulty": "easy",
+        "mood_targets": ["overwhelmed", "anxious", "energetic"],
+        "time_periods": ["morning", "afternoon"],
+        "tags": ["productive", "indoor", "solo", "control"]
+    },
+    
+    "cooking": {
+        "title": "Mindful Cooking",
+        "description": "Prepare a nourishing meal with intention",
+        "duration_min": 20, "duration_max": 90,
+        "energy_required": "medium", "location": "home",
+        "materials": ["ingredients", "cooking_utensils", "recipe"],
+        "instructions": "Choose a recipe you enjoy. Focus on each step, smell the ingredients, and create something nourishing for yourself.",
+        "benefits": ["nourishment", "accomplishment", "mindfulness", "self_care"],
+        "recovery_value": "high", "difficulty": "moderate",
+        "mood_targets": ["depressed", "anxious", "energetic"],
+        "time_periods": ["afternoon", "evening"],
+        "tags": ["productive", "indoor", "solo", "nourishing"]
+    },
+    
+    # RELAXATION ACTIVITIES
+    "meditation": {
+        "title": "Guided Meditation",
+        "description": "Practice mindfulness meditation for inner peace",
+        "duration_min": 5, "duration_max": 30,
+        "energy_required": "very_low", "location": "anywhere",
+        "materials": ["quiet_space", "meditation_app_optional"],
+        "instructions": "Sit comfortably and focus on your breath, a mantra, or use a guided meditation app. Start with just 5 minutes.",
+        "benefits": ["stress_relief", "mindfulness", "emotional_regulation", "peace"],
+        "recovery_value": "very_high", "difficulty": "easy",
+        "mood_targets": ["anxious", "overwhelmed", "angry"],
+        "time_periods": ["morning", "midday", "evening"],
+        "tags": ["indoor", "solo", "mindfulness", "therapeutic"]
+    },
+    
+    "warm_bath": {
+        "title": "Relaxing Bath",
+        "description": "Take a warm, soothing bath for self-care",
+        "duration_min": 15, "duration_max": 45,
+        "energy_required": "very_low", "location": "home",
+        "materials": ["bathtub", "warm_water", "bath_products_optional"],
+        "instructions": "Run a warm bath, add salts or oils if available. Soak and focus on the warmth and relaxation.",
+        "benefits": ["relaxation", "self_care", "stress_relief", "comfort"],
+        "recovery_value": "high", "difficulty": "easy",
+        "mood_targets": ["depressed", "anxious", "overwhelmed"],
+        "time_periods": ["evening"],
+        "tags": ["indoor", "solo", "relaxation", "self_care"]
+    },
+    
+    # GRATITUDE ACTIVITIES
+    "gratitude_practice": {
+        "title": "Gratitude Practice",
+        "description": "Focus on things you're thankful for",
+        "duration_min": 5, "duration_max": 15,
+        "energy_required": "very_low", "location": "anywhere",
+        "materials": ["notebook_optional"],
+        "instructions": "Think of or write down 3-5 things you're grateful for today. Be specific and feel the appreciation.",
+        "benefits": ["positive_mindset", "perspective", "mood_boost", "mindfulness"],
+        "recovery_value": "high", "difficulty": "easy",
+        "mood_targets": ["depressed", "overwhelmed", "grateful"],
+        "time_periods": ["morning", "evening"],
+        "tags": ["indoor", "solo", "positive", "quick"]
+    },
+    
+    "nature_appreciation": {
+        "title": "Nature Connection",
+        "description": "Spend time mindfully observing nature",
+        "duration_min": 10, "duration_max": 60,
+        "energy_required": "low", "location": "outdoor",
+        "materials": ["outdoor_access"],
+        "instructions": "Sit or walk in nature. Notice trees, birds, sky, or plants. Breathe deeply and feel connected to the natural world.",
+        "benefits": ["peace", "perspective", "fresh_air", "mindfulness"],
+        "recovery_value": "very_high", "difficulty": "easy",
+        "mood_targets": ["depressed", "anxious", "overwhelmed", "grateful"],
+        "time_periods": ["morning", "afternoon", "evening"],
+        "tags": ["outdoor", "solo", "nature", "mindfulness"]
+    }
+}
+
+# Mood-specific activity preferences
+MOOD_PREFERENCES = {
+    "depressed": {
+        "preferred_energy": ["very_low", "low"],
+        "preferred_tags": ["solo", "gentle", "therapeutic", "self_care"],
+        "avoid_tags": ["high_energy", "social_pressure"],
+        "recommended_duration": "15-30",
+        "approach": "Start small and build momentum"
+    },
+    "anxious": {
+        "preferred_energy": ["very_low", "low", "medium"],
+        "preferred_tags": ["calming", "mindfulness", "solo", "structured"],
+        "avoid_tags": ["unpredictable", "social_pressure"],
+        "recommended_duration": "10-20",
+        "approach": "Focus on grounding and calming activities"
+    },
+    "energetic": {
+        "preferred_energy": ["medium", "high", "very_high"],
+        "preferred_tags": ["physical", "creative", "productive", "engaging"],
+        "avoid_tags": ["sedentary", "passive"],
+        "recommended_duration": "30-60",
+        "approach": "Channel energy into positive outlets"
+    },
+    "neutral": {
+        "preferred_energy": ["low", "medium"],
+        "preferred_tags": ["routine", "balanced", "maintainance"],
+        "avoid_tags": [],
+        "recommended_duration": "20-45",
+        "approach": "Maintain stable routines and gentle activities"
+    },
+    "overwhelmed": {
+        "preferred_energy": ["very_low", "low"],
+        "preferred_tags": ["simplifying", "organizing", "calming", "solo"],
+        "avoid_tags": ["complex", "social", "demanding"],
+        "recommended_duration": "10-25",
+        "approach": "Break things into small, manageable steps"
+    },
+    "lonely": {
+        "preferred_energy": ["low", "medium"],
+        "preferred_tags": ["social", "connection", "community"],
+        "avoid_tags": ["isolation", "solo_only"],
+        "recommended_duration": "30-90",
+        "approach": "Prioritize social connection and community"
+    },
+    "angry": {
+        "preferred_energy": ["medium", "high"],
+        "preferred_tags": ["physical", "expressive", "release"],
+        "avoid_tags": ["passive", "suppressive"],
+        "recommended_duration": "15-45",
+        "approach": "Healthy expression and physical release"
+    },
+    "grateful": {
+        "preferred_energy": ["low", "medium", "high"],
+        "preferred_tags": ["positive", "sharing", "appreciation"],
+        "avoid_tags": ["negative", "complaining"],
+        "recommended_duration": "15-60",
+        "approach": "Amplify positive feelings through action"
+    }
+}
+
+def get_time_period(current_time_str: str = None) -> str:
+    """Determine time period from time string or current time"""
+    if current_time_str:
+        try:
+            # Handle different time formats
+            if ":" in current_time_str:
+                hour = int(current_time_str.split(":")[0])
+            else:
+                hour = int(current_time_str)
+        except (ValueError, IndexError):
+            hour = datetime.now().hour
+    else:
+        hour = datetime.now().hour
+    
+    if 5 <= hour <= 10:
+        return "morning"
+    elif 11 <= hour <= 14:
+        return "midday" 
+    elif 15 <= hour <= 18:
+        return "afternoon"
+    elif 19 <= hour <= 22:
+        return "evening"
+    else:
+        return "night"
+
+def calculate_activity_score(activity_id: str, activity_data: Dict, mood: str, time_period: str, 
+                           energy_level: str, location: str, preferences: List[str], duration: int) -> float:
+    """Calculate how well an activity matches the user's current needs"""
+    score = 0.0
+    reasons = []
+    
+    # Mood match (40% weight)
+    if mood in activity_data.get("mood_targets", []):
+        score += 0.4
+        reasons.append(f"Perfect match for {mood} mood")
+    
+    # Time appropriateness (20% weight)
+    if time_period in activity_data.get("time_periods", []):
+        score += 0.2
+        reasons.append(f"Good timing for {time_period}")
+    
+    # Energy level match (15% weight)
+    activity_energy = activity_data.get("energy_required", "medium")
+    mood_prefs = MOOD_PREFERENCES.get(mood, {})
+    preferred_energies = mood_prefs.get("preferred_energy", ["medium"])
+    
+    if activity_energy in preferred_energies:
+        score += 0.15
+        reasons.append("Energy level matches your capacity")
+    
+    # Location match (10% weight)
+    if location == "anywhere" or activity_data.get("location") == location or activity_data.get("location") == "anywhere":
+        score += 0.1
+        reasons.append("Available at your location")
+    
+    # Preferences match (10% weight)
+    activity_tags = activity_data.get("tags", [])
+    preference_matches = len(set(preferences) & set(activity_tags))
+    if preference_matches > 0:
+        score += 0.1 * (preference_matches / len(preferences) if preferences else 1)
+        reasons.append(f"Matches {preference_matches} of your preferences")
+    
+    # Duration feasibility (5% weight)
+    if activity_data.get("duration_min", 0) <= duration <= activity_data.get("duration_max", 999):
+        score += 0.05
+        reasons.append("Fits your available time")
+    
+    return min(score, 1.0), reasons
+
+def get_personalization_notes(mood: str, time_period: str, energy_level: str) -> List[str]:
+    """Generate personalized guidance based on user state"""
+    notes = []
+    
+    mood_info = MOOD_PREFERENCES.get(mood, {})
+    approach = mood_info.get("approach", "")
+    if approach:
+        notes.append(f"For {mood} mood: {approach}")
+    
+    # Time-based notes
+    time_notes = {
+        "morning": "Morning is great for setting a positive tone for the day",
+        "midday": "Midday energy can be used for more active or social activities", 
+        "afternoon": "Afternoon is perfect for productive or creative activities",
+        "evening": "Evening is ideal for winding down and self-care",
+        "night": "Late night calls for gentle, relaxing activities"
+    }
+    
+    if time_period in time_notes:
+        notes.append(time_notes[time_period])
+    
+    # Energy-based notes
+    if energy_level in ["very_low", "low"]:
+        notes.append("With lower energy, focus on gentle activities that don't overwhelm")
+    elif energy_level in ["high", "very_high"]:
+        notes.append("Your high energy is perfect for physical or engaging activities")
+    
+    return notes
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Personalized Activity Recommendation API",
+        "version": "1.0.0", 
+        "description": "Get evidence-based activity suggestions for mood and recovery support",
+        "endpoints": {
+            "recommend": "/recommend-activity",
+            "moods": "/supported-moods", 
+            "activities": "/all-activities",
+            "health": "/health"
+        }
+    }
+
+@app.post("/recommend-activity", response_model=RecommendationResponse)
+async def recommend_activity(request: ActivityRequest):
+    """
+    Get personalized activity recommendations based on mood, time, and preferences
+    
+    Returns ranked list of activities with detailed instructions and rationale
+    """
+    try:
+        # Determine time period
+        time_period = get_time_period(request.current_time)
+        
+        # Get all matching activities
+        recommendations = []
+        
+        for activity_id, activity_data in ACTIVITY_DATABASE.items():
+            score, reasons = calculate_activity_score(
+                activity_id, activity_data, request.mood, time_period,
+                request.energy_level, request.location, 
+                request.preferences or [], request.duration_available
+            )
+            
+            if score > 0.3:  # Only include reasonably good matches
+                recommendation = ActivityRecommendation(
+                    activity_id=activity_id,
+                    score=round(score, 3),
+                    match_reasons=reasons,
+                    details=ActivityDetails(
+                        title=activity_data["title"],
+                        description=activity_data["description"],
+                        duration_min=activity_data["duration_min"],
+                        duration_max=activity_data["duration_max"],
+                        energy_required=activity_data["energy_required"],
+                        location=activity_data["location"],
+                        materials=activity_data["materials"],
+                        instructions=activity_data["instructions"],
+                        benefits=activity_data["benefits"],
+                        recovery_value=activity_data["recovery_value"],
+                        difficulty=activity_data["difficulty"]
+                    )
+                )
+                recommendations.append(recommendation)
+        
+        # Sort by score (highest first)
+        recommendations.sort(key=lambda x: x.score, reverse=True)
+        
+        # Take top 5 recommendations
+        top_recommendations = recommendations[:5]
+        
+        # Add some randomization for variety while keeping top scorers
+        if len(recommendations) > 5:
+            additional = random.sample(recommendations[5:min(10, len(recommendations))], 
+                                     min(2, len(recommendations) - 5))
+            top_recommendations.extend(additional)
+        
+        # Generate context and personalization
+        mood_context = {
+            "current_mood": request.mood,
+            "mood_guidance": MOOD_PREFERENCES.get(request.mood, {}),
+            "energy_level": request.energy_level
+        }
+        
+        time_context = {
+            "time_period": time_period,
+            "current_time": request.current_time or datetime.now().strftime("%H:%M"),
+            "optimal_for": f"{time_period.capitalize()} activities"
+        }
+        
+        personalization_notes = get_personalization_notes(request.mood, time_period, request.energy_level)
+        
+        return RecommendationResponse(
+            recommendations=top_recommendations,
+            total_found=len(recommendations),
+            mood_context=mood_context,
+            time_context=time_context,
+            personalization_notes=personalization_notes
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recommendation failed: {str(e)}")
+
+@app.get("/supported-moods")
+async def get_supported_moods():
+    """Get all supported mood types with descriptions"""
+    return {
+        "moods": [
+            {"mood": "depressed", "description": "Low mood, sadness, lack of motivation"},
+            {"mood": "anxious", "description": "Worry, nervousness, restlessness"}, 
+            {"mood": "energetic", "description": "High energy, motivation, readiness for action"},
+            {"mood": "neutral", "description": "Balanced, calm, neither high nor low"},
+            {"mood": "overwhelmed", "description": "Stressed, too much to handle, scattered"},
+            {"mood": "lonely", "description": "Isolated, disconnected, needing social connection"},
+            {"mood": "angry", "description": "Frustrated, irritated, needing healthy expression"},
+            {"mood": "grateful", "description": "Appreciative, positive, wanting to share joy"}
+        ]
+    }
+
+@app.get("/all-activities") 
+async def get_all_activities():
+    """Get summary of all available activities"""
+    activities = []
+    for activity_id, data in ACTIVITY_DATABASE.items():
+        activities.append({
+            "id": activity_id,
+            "title": data["title"],
+            "description": data["description"],
+            "duration": f"{data['duration_min']}-{data['duration_max']} min",
+            "energy_required": data["energy_required"],
+            "location": data["location"],
+            "mood_targets": data["mood_targets"],
+            "benefits": data["benefits"]
+        })
+    
+    return {
+        "total_activities": len(activities),
+        "activities": activities
+    }
+
+@app.post("/quick-suggestion")
+async def quick_suggestion(mood: MoodType, energy: EnergyLevel = EnergyLevel.medium):
+    """Get one quick activity suggestion for immediate use"""
+    request = ActivityRequest(mood=mood, energy_level=energy)
+    response = await recommend_activity(request)
+    
+    if response.recommendations:
+        top_activity = response.recommendations[0]
+        return {
+            "quick_suggestion": {
+                "activity": top_activity.details.title,
+                "description": top_activity.details.description,
+                "duration": f"{top_activity.details.duration_min}-{top_activity.details.duration_max} minutes",
+                "instructions": top_activity.details.instructions,
+                "why_recommended": top_activity.match_reasons[0] if top_activity.match_reasons else "Good fit for your current state"
+            }
+        }
+    else:
+        return {"quick_suggestion": "Take 5 deep breaths and drink a glass of water"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Activity Recommendation API",
+        "version": "1.0.0",
+        "total_activities": len(ACTIVITY_DATABASE),
+        "supported_moods": len(MoodType),
+        "features": {
+            "mood_based_recommendations": True,
+            "time_aware_suggestions": True, 
+            "personalized_scoring": True,
+            "evidence_based_activities": True,
+            "behavioral_activation_therapy": True
+        }
+    }

@@ -1,0 +1,379 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from sklearn.ensemble import IsolationForest
+import uvicorn
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Relapse Risk Prediction API",
+    description="API for predicting addiction relapse risk based on behavioral patterns",
+    version="1.0.0"
+)
+
+# Pydantic models for request/response
+class UserBehavioralData(BaseModel):
+    user_id: str = Field(..., description="Unique user identifier")
+    age: int = Field(..., ge=18, le=100, description="User age")
+    gender: str = Field(..., description="Gender (Male/Female/Other)")
+    addiction_type: str = Field(..., description="Type of addiction (Alcohol/Drugs/Nicotine/Gaming)")
+    days_sober: int = Field(..., ge=0, description="Current sobriety streak in days")
+    previous_relapses: int = Field(..., ge=0, description="Number of previous relapses")
+    
+    # Daily behavioral metrics (last 7 days average)
+    checkin_frequency: float = Field(..., ge=0, le=1, description="Daily check-in frequency (0-1)")
+    avg_mood_score: float = Field(..., ge=1, le=10, description="Average mood score (1-10)")
+    avg_sleep_hours: float = Field(..., ge=0, le=24, description="Average sleep hours per night")
+    avg_stress_level: float = Field(..., ge=1, le=10, description="Average stress level (1-10)")
+    social_support_score: float = Field(..., ge=1, le=10, description="Social support score (1-10)")
+    therapy_sessions_per_week: int = Field(..., ge=0, le=7, description="Therapy sessions per week")
+    task_completion_rate: float = Field(..., ge=0, le=1, description="Recovery task completion rate (0-1)")
+    
+    # Optional recent patterns
+    mood_trend: Optional[float] = Field(None, ge=-5, le=5, description="Mood trend over last week (-5 to +5)")
+    sleep_quality: Optional[float] = Field(None, ge=1, le=5, description="Sleep quality (1-5)")
+    craving_intensity: Optional[float] = Field(None, ge=0, le=10, description="Recent craving intensity (0-10)")
+
+class RiskFactor(BaseModel):
+    factor_name: str
+    risk_contribution: float
+    severity: str  # Low, Medium, High
+    recommendation: str
+
+class RelapsePredictionResponse(BaseModel):
+    user_id: str
+    risk_score: float  # 0-100 percentage
+    risk_category: str  # Low, Medium, High
+    confidence_level: float  # 0-1
+    contributing_factors: List[RiskFactor]
+    intervention_recommendations: List[str]
+    next_assessment_date: str
+    timestamp: str
+
+class HistoricalData(BaseModel):
+    user_id: str
+    behavioral_data: List[UserBehavioralData]
+
+# Risk calculation engine
+class RelapseRiskCalculator:
+    def __init__(self):
+        # Research-based risk weights
+        self.risk_weights = {
+            'low_engagement': 25,
+            'poor_mood': 30,
+            'high_stress': 20,
+            'poor_sleep': 15,
+            'low_social_support': 25,
+            'high_craving': 35,
+            'mood_decline': 20,
+            'poor_sleep_quality': 10,
+            'low_task_completion': 15,
+            'multiple_relapses': 15,
+            'recent_sobriety': 10
+        }
+        
+        # Anomaly detection model for behavioral patterns
+        self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
+        
+    def calculate_risk_score(self, data: UserBehavioralData) -> Dict[str, Any]:
+        risk_factors = []
+        total_risk = 0
+        
+        # Engagement patterns
+        if data.checkin_frequency < 0.3:
+            factor = RiskFactor(
+                factor_name="Low App Engagement",
+                risk_contribution=self.risk_weights['low_engagement'],
+                severity="High",
+                recommendation="Increase daily check-ins and set reminders"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['low_engagement']
+        
+        # Mood assessment
+        if data.avg_mood_score < 4:
+            factor = RiskFactor(
+                factor_name="Poor Mood State",
+                risk_contribution=self.risk_weights['poor_mood'],
+                severity="High",
+                recommendation="Consider mood therapy sessions and mindfulness exercises"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['poor_mood']
+        
+        # Stress levels
+        if data.avg_stress_level > 7:
+            factor = RiskFactor(
+                factor_name="High Stress Levels",
+                risk_contribution=self.risk_weights['high_stress'],
+                severity="Medium",
+                recommendation="Practice stress management techniques and breathing exercises"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['high_stress']
+        
+        # Sleep patterns
+        if data.avg_sleep_hours < 6:
+            factor = RiskFactor(
+                factor_name="Poor Sleep Pattern",
+                risk_contribution=self.risk_weights['poor_sleep'],
+                severity="Medium",
+                recommendation="Establish consistent sleep schedule and sleep hygiene"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['poor_sleep']
+        
+        # Social support
+        if data.social_support_score < 4:
+            factor = RiskFactor(
+                factor_name="Low Social Support",
+                risk_contribution=self.risk_weights['low_social_support'],
+                severity="High",
+                recommendation="Connect with support groups and strengthen social network"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['low_social_support']
+        
+        # Craving intensity (if provided)
+        if data.craving_intensity and data.craving_intensity > 6:
+            factor = RiskFactor(
+                factor_name="High Craving Intensity",
+                risk_contribution=self.risk_weights['high_craving'],
+                severity="High",
+                recommendation="Immediate intervention needed - contact therapist or sponsor"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['high_craving']
+        
+        # Mood trend (if provided)
+        if data.mood_trend and data.mood_trend < -2:
+            factor = RiskFactor(
+                factor_name="Declining Mood Trend",
+                risk_contribution=self.risk_weights['mood_decline'],
+                severity="Medium",
+                recommendation="Monitor mood patterns and consider additional therapy"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['mood_decline']
+        
+        # Task completion
+        if data.task_completion_rate < 0.4:
+            factor = RiskFactor(
+                factor_name="Low Task Completion",
+                risk_contribution=self.risk_weights['low_task_completion'],
+                severity="Medium",
+                recommendation="Break tasks into smaller steps and set achievable goals"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['low_task_completion']
+        
+        # Historical factors
+        if data.previous_relapses > 2:
+            factor = RiskFactor(
+                factor_name="Multiple Previous Relapses",
+                risk_contribution=self.risk_weights['multiple_relapses'],
+                severity="Medium",
+                recommendation="Review relapse patterns and strengthen prevention strategies"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['multiple_relapses']
+        
+        # Recent sobriety (higher risk in early recovery)
+        if data.days_sober < 30:
+            factor = RiskFactor(
+                factor_name="Early Recovery Stage",
+                risk_contribution=self.risk_weights['recent_sobriety'],
+                severity="Low",
+                recommendation="Focus on building strong daily routines and support systems"
+            )
+            risk_factors.append(factor)
+            total_risk += self.risk_weights['recent_sobriety']
+        
+        # Cap the risk score at 100
+        final_risk_score = min(total_risk, 100)
+        
+        # Determine risk category
+        if final_risk_score >= 70:
+            risk_category = "High"
+            confidence = 0.85
+        elif final_risk_score >= 40:
+            risk_category = "Medium"
+            confidence = 0.75
+        else:
+            risk_category = "Low"
+            confidence = 0.65
+        
+        return {
+            'risk_score': final_risk_score,
+            'risk_category': risk_category,
+            'confidence_level': confidence,
+            'contributing_factors': risk_factors
+        }
+    
+    def generate_recommendations(self, risk_score: float, factors: List[RiskFactor]) -> List[str]:
+        recommendations = []
+        
+        if risk_score >= 70:
+            recommendations.extend([
+                "🚨 URGENT: Contact your therapist or sponsor immediately",
+                "🏥 Consider intensive outpatient program",
+                "📞 Use crisis helpline if experiencing strong cravings",
+                "👥 Attend additional support group meetings"
+            ])
+        elif risk_score >= 40:
+            recommendations.extend([
+                "📈 Increase therapy sessions frequency",
+                "🧘 Practice daily mindfulness and stress management",
+                "💪 Engage in physical exercise routine",
+                "📱 Use app more frequently for check-ins"
+            ])
+        else:
+            recommendations.extend([
+                "✅ Continue current recovery practices",
+                "📚 Explore additional recovery resources",
+                "🎯 Set new recovery goals",
+                "💬 Share experience with others in recovery"
+            ])
+        
+        # Add specific recommendations based on risk factors
+        for factor in factors:
+            if factor.recommendation not in [r.split(' ', 2)[-1] for r in recommendations]:
+                recommendations.append(f"🎯 {factor.recommendation}")
+        
+        return recommendations[:6]  # Limit to top 6 recommendations
+
+# Initialize risk calculator
+risk_calculator = RelapseRiskCalculator()
+
+# API Endpoints
+@app.get("/")
+async def root():
+    return {
+        "message": "Relapse Risk Prediction API",
+        "version": "1.0.0",
+        "endpoints": {
+            "predict": "/predict",
+            "bulk_predict": "/predict/bulk",
+            "health": "/health"
+        }
+    }
+
+@app.post("/predict", response_model=RelapsePredictionResponse)
+async def predict_relapse_risk(data: UserBehavioralData):
+    """
+    Predict relapse risk for a single user based on behavioral data
+    """
+    try:
+        # Calculate risk
+        risk_result = risk_calculator.calculate_risk_score(data)
+        
+        # Generate recommendations
+        recommendations = risk_calculator.generate_recommendations(
+            risk_result['risk_score'], 
+            risk_result['contributing_factors']
+        )
+        
+        # Calculate next assessment date
+        if risk_result['risk_score'] >= 70:
+            next_assessment = datetime.now() + timedelta(days=1)
+        elif risk_result['risk_score'] >= 40:
+            next_assessment = datetime.now() + timedelta(days=3)
+        else:
+            next_assessment = datetime.now() + timedelta(days=7)
+        
+        return RelapsePredictionResponse(
+            user_id=data.user_id,
+            risk_score=risk_result['risk_score'],
+            risk_category=risk_result['risk_category'],
+            confidence_level=risk_result['confidence_level'],
+            contributing_factors=risk_result['contributing_factors'],
+            intervention_recommendations=recommendations,
+            next_assessment_date=next_assessment.strftime("%Y-%m-%d"),
+            timestamp=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing prediction: {str(e)}")
+
+@app.post("/predict/bulk")
+async def bulk_predict_relapse_risk(data: List[UserBehavioralData]):
+    """
+    Predict relapse risk for multiple users
+    """
+    try:
+        results = []
+        for user_data in data:
+            risk_result = risk_calculator.calculate_risk_score(user_data)
+            recommendations = risk_calculator.generate_recommendations(
+                risk_result['risk_score'], 
+                risk_result['contributing_factors']
+            )
+            
+            if risk_result['risk_score'] >= 70:
+                next_assessment = datetime.now() + timedelta(days=1)
+            elif risk_result['risk_score'] >= 40:
+                next_assessment = datetime.now() + timedelta(days=3)
+            else:
+                next_assessment = datetime.now() + timedelta(days=7)
+            
+            results.append(RelapsePredictionResponse(
+                user_id=user_data.user_id,
+                risk_score=risk_result['risk_score'],
+                risk_category=risk_result['risk_category'],
+                confidence_level=risk_result['confidence_level'],
+                contributing_factors=risk_result['contributing_factors'],
+                intervention_recommendations=recommendations,
+                next_assessment_date=next_assessment.strftime("%Y-%m-%d"),
+                timestamp=datetime.now().isoformat()
+            ))
+        
+        return {"predictions": results, "total_users": len(results)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing bulk prediction: {str(e)}")
+
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Relapse Risk Prediction API"
+    }
+
+@app.get("/risk-factors")
+async def get_risk_factors():
+    """
+    Get information about risk factors used in the model
+    """
+    return {
+        "risk_factors": {
+            "behavioral_patterns": [
+                "Low app engagement frequency",
+                "Poor mood state (< 4/10)",
+                "High stress levels (> 7/10)",
+                "Insufficient sleep (< 6 hours)",
+                "Low social support (< 4/10)",
+                "High craving intensity (> 6/10)"
+            ],
+            "historical_factors": [
+                "Multiple previous relapses",
+                "Early recovery stage (< 30 days sober)"
+            ],
+            "trend_indicators": [
+                "Declining mood trend",
+                "Poor sleep quality",
+                "Low task completion rate"
+            ]
+        },
+        "risk_categories": {
+            "Low": "0-39 points",
+            "Medium": "40-69 points", 
+            "High": "70-100 points"
+        }
+    }

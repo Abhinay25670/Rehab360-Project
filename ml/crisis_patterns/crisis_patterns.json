@@ -1,0 +1,123 @@
+{
+  "critical_keywords": {
+    "suicidal": [
+      "kill myself",
+      "end it all",
+      "suicide",
+      "not worth living",
+      "better off dead",
+      "take my life",
+      "end my life"
+    ],
+    "self_harm": [
+      "cut myself",
+      "hurt myself",
+      "self harm",
+      "cutting",
+      "burning myself",
+      "punish myself"
+    ],
+    "immediate_danger": [
+      "tonight",
+      "right now",
+      "pills ready",
+      "gun",
+      "bridge",
+      "overdose on purpose"
+    ],
+    "method_indicators": [
+      "pills",
+      "rope",
+      "knife",
+      "bridge",
+      "gun",
+      "poison",
+      "hanging"
+    ]
+  },
+  "high_risk_phrases": {
+    "hopelessness": [
+      "no point",
+      "nothing matters",
+      "can't go on",
+      "no hope",
+      "no way out",
+      "pointless"
+    ],
+    "isolation": [
+      "nobody cares",
+      "all alone",
+      "no one understands",
+      "isolated",
+      "abandoned"
+    ],
+    "overwhelming": [
+      "can't take it",
+      "too much",
+      "can't handle",
+      "overwhelming",
+      "breaking point"
+    ],
+    "finality": [
+      "goodbye",
+      "last time",
+      "final",
+      "end",
+      "done with everything"
+    ]
+  },
+  "moderate_risk_indicators": {
+    "depression": [
+      "depressed",
+      "sad all the time",
+      "empty",
+      "numb",
+      "worthless",
+      "failure"
+    ],
+    "anxiety": [
+      "panic",
+      "can't breathe",
+      "anxiety attack",
+      "terrified",
+      "scared"
+    ],
+    "substance": [
+      "relapsed",
+      "used again",
+      "drinking",
+      "high",
+      "overdid it",
+      "too much"
+    ],
+    "stress": [
+      "stressed out",
+      "pressure",
+      "can't cope",
+      "breaking down"
+    ]
+  },
+  "emotional_indicators": {
+    "anger": [
+      "angry",
+      "rage",
+      "furious",
+      "hate",
+      "destroy"
+    ],
+    "despair": [
+      "hopeless",
+      "despair",
+      "lost",
+      "broken",
+      "shattered"
+    ],
+    "fear": [
+      "afraid",
+      "scared",
+      "terrified",
+      "panic",
+      "frightened"
+    ]
+  }
+}

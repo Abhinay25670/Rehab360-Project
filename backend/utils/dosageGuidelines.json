@@ -1,0 +1,146 @@
+{
+  "Alcohol": {
+    "18-40": [
+      {
+        "medicineName": "Naltrexone",
+        "typicalDoseMgPerDayRange": [50, 100],
+        "notes": "Common first-line medication for alcohol use disorder in adults; contraindications and liver function must be assessed by a doctor.",
+        "sourceName": "NIAAA – Treatment for Alcohol Problems: Finding and Getting Help",
+        "sourceUrl": "https://www.niaaa.nih.gov/publications/brochures-and-fact-sheets/treatment-alcohol-problems-finding-and-getting-help"
+      },
+      {
+        "medicineName": "Acamprosate",
+        "typicalDoseMgPerDayRange": [1332, 1998],
+        "notes": "Used to maintain abstinence in alcohol-dependent adults; dose and renal function must be evaluated by a doctor.",
+        "sourceName": "NICE guideline CG115 – Alcohol-use disorders: diagnosis, assessment and management of harmful drinking and alcohol dependence",
+        "sourceUrl": "https://www.nice.org.uk/guidance/cg115"
+      },
+      {
+        "medicineName": "Disulfiram",
+        "typicalDoseMgPerDayRange": [250, 500],
+        "notes": "Creates aversive reaction to alcohol; requires strict medical supervision and patient commitment.",
+        "sourceName": "NIAAA – Treatment for Alcohol Problems",
+        "sourceUrl": "https://www.niaaa.nih.gov/publications/brochures-and-fact-sheets/treatment-alcohol-problems-finding-and-getting-help"
+      }
+    ],
+    "41-65": [
+      {
+        "medicineName": "Naltrexone",
+        "typicalDoseMgPerDayRange": [50, 100],
+        "notes": "Dosage may need adjustment based on liver function and comorbidities in older adults.",
+        "sourceName": "NIAAA – Treatment for Alcohol Problems",
+        "sourceUrl": "https://www.niaaa.nih.gov/publications/brochures-and-fact-sheets/treatment-alcohol-problems-finding-and-getting-help"
+      },
+      {
+        "medicineName": "Acamprosate",
+        "typicalDoseMgPerDayRange": [1332, 1998],
+        "notes": "Renal function must be carefully monitored in older adults.",
+        "sourceName": "NICE guideline CG115",
+        "sourceUrl": "https://www.nice.org.uk/guidance/cg115"
+      }
+    ]
+  },
+  "Nicotine": {
+    "18-40": [
+      {
+        "medicineName": "Varenicline",
+        "typicalDoseMgPerDayRange": [1, 2],
+        "notes": "Start with 0.5 mg once daily, titrate to 1 mg twice daily. Requires prescription and medical supervision.",
+        "sourceName": "FDA – Chantix (Varenicline) Label",
+        "sourceUrl": "https://www.fda.gov/drugs/postmarket-drug-safety-information-patients-and-providers/varenicline-marketed-chantix-information"
+      },
+      {
+        "medicineName": "Bupropion",
+        "typicalDoseMgPerDayRange": [150, 300],
+        "notes": "Extended-release formulation; contraindicated in patients with seizure disorders or eating disorders.",
+        "sourceName": "CDC – Smoking Cessation Medications",
+        "sourceUrl": "https://www.cdc.gov/tobacco/campaign/tips/quit-smoking/quit-smoking-medications/how-to-use-quit-smoking-medicines/index.html"
+      },
+      {
+        "medicineName": "Nicotine Replacement Therapy (NRT)",
+        "typicalDoseMgPerDayRange": [7, 21],
+        "notes": "Available as patches, gum, lozenges, inhalers, or nasal spray. Dosage varies by product type.",
+        "sourceName": "CDC – Smoking Cessation Medications",
+        "sourceUrl": "https://www.cdc.gov/tobacco/campaign/tips/quit-smoking/quit-smoking-medications/how-to-use-quit-smoking-medicines/index.html"
+      }
+    ],
+    "41-65": [
+      {
+        "medicineName": "Varenicline",
+        "typicalDoseMgPerDayRange": [1, 2],
+        "notes": "May require dose adjustment based on renal function in older adults.",
+        "sourceName": "FDA – Chantix Label",
+        "sourceUrl": "https://www.fda.gov/drugs/postmarket-drug-safety-information-patients-and-providers/varenicline-marketed-chantix-information"
+      },
+      {
+        "medicineName": "Bupropion",
+        "typicalDoseMgPerDayRange": [150, 300],
+        "notes": "Monitor for drug interactions and cardiovascular effects in older adults.",
+        "sourceName": "CDC – Smoking Cessation Medications",
+        "sourceUrl": "https://www.cdc.gov/tobacco/campaign/tips/quit-smoking/quit-smoking-medications/how-to-use-quit-smoking-medicines/index.html"
+      }
+    ]
+  },
+  "Opioids": {
+    "18-40": [
+      {
+        "medicineName": "Buprenorphine",
+        "typicalDoseMgPerDayRange": [8, 24],
+        "notes": "Sublingual or transdermal formulations. Requires special DEA waiver for prescribers. Induction must be supervised.",
+        "sourceName": "SAMHSA – Buprenorphine",
+        "sourceUrl": "https://www.samhsa.gov/substance-use/treatment/options/buprenorphine"
+      },
+      {
+        "medicineName": "Methadone",
+        "typicalDoseMgPerDayRange": [20, 120],
+        "notes": "Must be dispensed through certified opioid treatment programs (OTPs). Requires daily supervised dosing initially.",
+        "sourceName": "SAMHSA – Methadone",
+        "sourceUrl": "https://www.samhsa.gov/medications-substance-use-disorders/medications-counseling-related-conditions/methadone"
+      },
+      {
+        "medicineName": "Naltrexone",
+        "typicalDoseMgPerDayRange": [50, 150],
+        "notes": "Extended-release injectable (Vivitrol) or oral. Patient must be fully detoxified before starting.",
+        "sourceName": "SAMHSA – Naltrexone",
+        "sourceUrl": "https://www.samhsa.gov/medications-substance-use-disorders/medications-counseling-related-conditions/naltrexone"
+      }
+    ],
+    "41-65": [
+      {
+        "medicineName": "Buprenorphine",
+        "typicalDoseMgPerDayRange": [8, 24],
+        "notes": "Dosage adjustments may be needed based on liver function and comorbidities.",
+        "sourceName": "SAMHSA – Buprenorphine",
+        "sourceUrl": "https://www.samhsa.gov/substance-use/treatment/options/buprenorphine"
+      },
+      {
+        "medicineName": "Methadone",
+        "typicalDoseMgPerDayRange": [20, 100],
+        "notes": "Lower starting doses and slower titration may be needed in older adults.",
+        "sourceName": "SAMHSA – Methadone",
+        "sourceUrl": "https://www.samhsa.gov/medications-substance-use-disorders/medications-counseling-related-conditions/methadone"
+      }
+    ]
+  },
+  "Cannabis": {
+    "18-40": [
+      {
+        "medicineName": "No FDA-approved medications",
+        "typicalDoseMgPerDayRange": [0, 0],
+        "notes": "Currently no FDA-approved medications specifically for cannabis use disorder. Treatment focuses on behavioral therapies (CBT, motivational interviewing, contingency management).",
+        "sourceName": "NIDA – Cannabis (Marijuana) Research Report",
+        "sourceUrl": "https://nida.nih.gov/research-topics/cannabis-marijuana"
+      }
+    ],
+    "41-65": [
+      {
+        "medicineName": "No FDA-approved medications",
+        "typicalDoseMgPerDayRange": [0, 0],
+        "notes": "Behavioral interventions are the primary treatment approach. Co-occurring mental health conditions should be addressed.",
+        "sourceName": "NIDA – Cannabis Research Report",
+        "sourceUrl": "https://nida.nih.gov/research-topics/cannabis-marijuana"
+      }
+    ]
+  }
+}
+

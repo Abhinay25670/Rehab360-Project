@@ -1,0 +1,487 @@
+from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
+from typing import Dict, List, Optional, Any
+import requests
+import json
+import os
+import re
+from datetime import datetime, timedelta
+import pandas as pd
+import numpy as np
+from google import genai
+from google.genai import types
+
+# Initialize FastAPI app
+app = FastAPI(title="Addiction Recovery Nutrition Tracker", version="1.0.0")
+
+# Configuration
+USDA_API_KEY = os.environ.get("USDA_API_KEY", "DEMO_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1"
+
+# Pydantic Models
+class UserProfile(BaseModel):
+    user_id: str
+    addiction_type: str  # "alcohol", "opioids", "stimulants", "marijuana"
+    recovery_stage: str  # "detox", "early_recovery", "long_term"
+    age: int
+    gender: str
+    weight: float  # kg
+    height: float  # cm
+    activity_level: str  # "sedentary", "moderate", "active"
+    days_sober: Optional[int] = 0
+    medical_conditions: Optional[List[str]] = []
+    food_allergies: Optional[List[str]] = []
+    budget_level: Optional[str] = "moderate"  # "low", "moderate", "high"
+    cooking_skill: Optional[str] = "intermediate"  # "beginner", "intermediate", "advanced"
+
+class FoodInput(BaseModel):
+    user_id: str
+    food_text: str
+    meal_type: Optional[str] = "general"  # "breakfast", "lunch", "dinner", "snack"
+    timestamp: Optional[datetime] = None
+
+class NutritionResponse(BaseModel):
+    nutrition_analysis: Dict[str, Any]
+    addiction_specific_insights: Dict[str, Any]
+    recommendations: Dict[str, Any]
+    recovery_score: float
+
+# Addiction-specific nutritional requirements
+ADDICTION_REQUIREMENTS = {
+    "alcohol": {
+        "thiamine_multiplier": 3.0,
+        "folate_multiplier": 2.0,
+        "magnesium_multiplier": 2.5,
+        "zinc_multiplier": 2.0,
+        "vitamin_c_multiplier": 1.5,
+        "protein_multiplier": 1.2,
+        "complex_carbs_multiplier": 1.3,
+        "key_nutrients": ["thiamine", "folate", "magnesium", "zinc", "vitamin_c"]
+    },
+    "opioids": {
+        "fiber_multiplier": 2.0,
+        "protein_multiplier": 1.4,
+        "vitamin_c_multiplier": 1.8,
+        "iron_multiplier": 1.5,
+        "calcium_multiplier": 1.3,
+        "key_nutrients": ["fiber", "protein", "vitamin_c", "iron", "calcium"]
+    },
+    "stimulants": {
+        "protein_multiplier": 1.5,
+        "calcium_multiplier": 2.0,
+        "magnesium_multiplier": 1.8,
+        "b_vitamins_multiplier": 1.6,
+        "frequent_meals": True,
+        "key_nutrients": ["protein", "calcium", "magnesium", "thiamine", "riboflavin"]
+    },
+    "marijuana": {
+        "protein_multiplier": 1.2,
+        "fiber_multiplier": 1.3,
+        "vitamin_c_multiplier": 1.4,
+        "zinc_multiplier": 1.3,
+        "key_nutrients": ["protein", "fiber", "vitamin_c", "zinc"]
+    }
+}
+
+class GeminiClient:
+    def __init__(self):
+        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        self.model = "gemini-2.0-flash"
+    
+    def parse_food_input(self, food_text: str, addiction_type: str, meal_type: str) -> Dict:
+        prompt = f"""
+        Parse this food intake text and extract structured data. The user is recovering from {addiction_type} addiction.
+        
+        Food Input: "{food_text}"
+        Meal Type: {meal_type}
+        
+        Extract and return ONLY a valid JSON object with this exact structure:
+        {{
+            "foods": [
+                {{"name": "food_name", "quantity": number, "unit": "unit_type", "cooking_method": "method_if_mentioned"}},
+            ],
+            "emotional_context": "brief description of any emotional eating patterns",
+            "eating_pattern": "regular/irregular/rushed/mindful",
+            "estimated_timing": "time_if_mentioned_or_estimated",
+            "beverages": [
+                {{"name": "beverage_name", "quantity": number, "unit": "unit_type"}}
+            ]
+        }}
+        
+        Guidelines:
+        - Convert all quantities to standard units (grams, cups, pieces, etc.)
+        - If quantity is vague ("some", "a lot"), estimate reasonable amounts
+        - Include cooking methods as they affect nutrition
+        - Note emotional context for addiction recovery support
+        - Be specific with food names (e.g., "whole wheat bread" vs "bread")
+        """
+        
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=prompt)],
+            ),
+        ]
+        
+        generate_content_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+        )
+        
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            return json.loads(response.text)
+        except Exception as e:
+            # Fallback parsing if Gemini fails
+            return self._fallback_parse(food_text)
+    
+    def generate_personalized_recommendations(self, nutrition_analysis: Dict, user_profile: UserProfile) -> str:
+        prompt = f"""
+        As a nutrition specialist for addiction recovery, provide personalized recommendations.
+        
+        User Profile:
+        - Addiction: {user_profile.addiction_type}
+        - Recovery Stage: {user_profile.recovery_stage}
+        - Days Sober: {user_profile.days_sober}
+        - Age: {user_profile.age}, Gender: {user_profile.gender}
+        - Budget: {user_profile.budget_level}
+        - Cooking Skill: {user_profile.cooking_skill}
+        
+        Current Nutrition Analysis:
+        {json.dumps(nutrition_analysis.get('deficiencies', {}), indent=2)}
+        
+        Provide practical, encouraging recommendations covering:
+        1. Specific foods to add today/tomorrow (with portions)
+        2. Simple meal prep ideas for their skill level
+        3. Budget-friendly options
+        4. Recovery-specific motivation
+        5. Craving management through nutrition
+        6. Realistic next steps
+        
+        Keep tone supportive and practical. Focus on small, achievable changes.
+        """
+        
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=prompt)],
+            ),
+        ]
+        
+        generate_content_config = types.GenerateContentConfig(
+            response_mime_type="text/plain",
+        )
+        
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            return response.text
+        except Exception as e:
+            return f"Unable to generate personalized recommendations at this time. Error: {str(e)}"
+    
+    def _fallback_parse(self, food_text: str) -> Dict:
+        # Simple regex-based fallback
+        foods = []
+        # Basic pattern matching for common formats
+        patterns = [
+            r'(\d+)\s*(cups?|slices?|pieces?|tablespoons?|teaspoons?)\s+(.+)',
+            r'(\d+)\s+(.+)',
+            r'(.+)\s*[,;]\s*(.+)'
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, food_text, re.IGNORECASE)
+            for match in matches:
+                if len(match) == 3:
+                    foods.append({
+                        "name": match[2].strip(),
+                        "quantity": float(match[0]),
+                        "unit": match[1],
+                        "cooking_method": "unknown"
+                    })
+        
+        return {
+            "foods": foods,
+            "emotional_context": "parsing_fallback",
+            "eating_pattern": "unknown",
+            "estimated_timing": "unknown",
+            "beverages": []
+        }
+
+class USDAClient:
+    def __init__(self):
+        self.base_url = USDA_BASE_URL
+        self.api_key = USDA_API_KEY
+    
+    def search_food(self, food_name: str) -> Dict:
+        """Search for food in USDA database"""
+        url = f"{self.base_url}/foods/search"
+        params = {
+            "query": food_name,
+            "api_key": self.api_key,
+            "pageSize": 5
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"USDA API error: {str(e)}")
+    
+    def get_food_nutrients(self, fdc_id: int) -> Dict:
+        """Get detailed nutrient information for a specific food"""
+        url = f"{self.base_url}/food/{fdc_id}"
+        params = {"api_key": self.api_key}
+        
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"USDA API error: {str(e)}")
+
+class NutritionCalculator:
+    def __init__(self):
+        self.usda_client = USDAClient()
+    
+    def calculate_bmr(self, user_profile: UserProfile) -> float:
+        """Calculate Basal Metabolic Rate using Mifflin-St Jeor Equation"""
+        if user_profile.gender.lower() == "male":
+            bmr = 10 * user_profile.weight + 6.25 * user_profile.height - 5 * user_profile.age + 5
+        else:
+            bmr = 10 * user_profile.weight + 6.25 * user_profile.height - 5 * user_profile.age - 161
+        
+        # Activity level multipliers
+        activity_multipliers = {
+            "sedentary": 1.2,
+            "moderate": 1.55,
+            "active": 1.725
+        }
+        
+        return bmr * activity_multipliers.get(user_profile.activity_level, 1.55)
+    
+    def get_addiction_specific_needs(self, user_profile: UserProfile) -> Dict:
+        """Calculate nutritional needs specific to addiction recovery"""
+        base_calories = self.calculate_bmr(user_profile)
+        
+        # Standard nutritional needs per kg body weight
+        base_needs = {
+            "calories": base_calories,
+            "protein": user_profile.weight * 0.8,  # g per kg
+            "fiber": 25 if user_profile.gender.lower() == "female" else 35,  # g per day
+            "thiamine": 1.1 if user_profile.gender.lower() == "female" else 1.2,  # mg
+            "folate": 400,  # mcg
+            "magnesium": 310 if user_profile.gender.lower() == "female" else 400,  # mg
+            "zinc": 8 if user_profile.gender.lower() == "female" else 11,  # mg
+            "vitamin_c": 75 if user_profile.gender.lower() == "female" else 90,  # mg
+            "calcium": 1000,  # mg
+            "iron": 18 if user_profile.gender.lower() == "female" else 8  # mg
+        }
+        
+        # Apply addiction-specific multipliers
+        addiction_reqs = ADDICTION_REQUIREMENTS.get(user_profile.addiction_type, {})
+        adjusted_needs = base_needs.copy()
+        
+        for nutrient, base_amount in base_needs.items():
+            multiplier_key = f"{nutrient}_multiplier"
+            if multiplier_key in addiction_reqs:
+                adjusted_needs[nutrient] = base_amount * addiction_reqs[multiplier_key]
+        
+        return adjusted_needs
+    
+    def analyze_food_intake(self, parsed_foods: List[Dict]) -> Dict:
+        """Analyze nutritional content of food intake"""
+        total_nutrients = {
+            "calories": 0, "protein": 0, "carbohydrates": 0, "fiber": 0,
+            "thiamine": 0, "folate": 0, "magnesium": 0, "zinc": 0,
+            "vitamin_c": 0, "calcium": 0, "iron": 0, "fat": 0
+        }
+        
+        for food_item in parsed_foods:
+            # Search USDA database
+            search_results = self.usda_client.search_food(food_item["name"])
+            
+            if search_results.get("foods"):
+                # Get the first/best match
+                fdc_id = search_results["foods"][0]["fdcId"]
+                food_data = self.usda_client.get_food_nutrients(fdc_id)
+                
+                # Extract nutrients and scale by quantity
+                nutrients = self._extract_nutrients(food_data)
+                quantity_factor = self._calculate_quantity_factor(food_item)
+                
+                for nutrient, amount in nutrients.items():
+                    if nutrient in total_nutrients:
+                        total_nutrients[nutrient] += amount * quantity_factor
+        
+        return total_nutrients
+    
+    def _extract_nutrients(self, food_data: Dict) -> Dict:
+        """Extract relevant nutrients from USDA food data"""
+        nutrients = {}
+        nutrient_mapping = {
+            "Energy": "calories",
+            "Protein": "protein", 
+            "Carbohydrate, by difference": "carbohydrates",
+            "Fiber, total dietary": "fiber",
+            "Thiamin": "thiamine",
+            "Folate, total": "folate",
+            "Magnesium, Mg": "magnesium",
+            "Zinc, Zn": "zinc",
+            "Vitamin C, total ascorbic acid": "vitamin_c",
+            "Calcium, Ca": "calcium",
+            "Iron, Fe": "iron",
+            "Total lipid (fat)": "fat"
+        }
+        
+        for nutrient_data in food_data.get("foodNutrients", []):
+            nutrient_name = nutrient_data.get("nutrient", {}).get("name", "")
+            if nutrient_name in nutrient_mapping:
+                amount = nutrient_data.get("amount", 0)
+                nutrients[nutrient_mapping[nutrient_name]] = amount
+        
+        return nutrients
+    
+    def _calculate_quantity_factor(self, food_item: Dict) -> float:
+        """Calculate scaling factor based on quantity and unit"""
+        quantity = food_item.get("quantity", 1)
+        unit = food_item.get("unit", "serving").lower()
+        
+        # Convert to per 100g basis (USDA standard)
+        unit_conversions = {
+            "gram": 0.01, "grams": 0.01, "g": 0.01,
+            "cup": 0.8, "cups": 0.8,
+            "slice": 0.3, "slices": 0.3,
+            "piece": 0.5, "pieces": 0.5,
+            "tablespoon": 0.15, "tablespoons": 0.15,
+            "teaspoon": 0.05, "teaspoons": 0.05,
+            "serving": 1.0
+        }
+        
+        return quantity * unit_conversions.get(unit, 1.0)
+
+# Initialize global instances
+# gemini_client = GeminiClient(api_key=GEMINI_API_KEY)
+nutrition_calculator = NutritionCalculator()
+
+# API Endpoints
+@app.post("/analyze-nutrition", response_model=NutritionResponse)
+async def analyze_nutrition(food_input: FoodInput, user_profile: UserProfile):
+    """Main endpoint to analyze nutrition intake"""
+    
+    try:
+        # Step 1: Parse food input with Gemini
+        parsed_data = gemini_client.parse_food_input(
+            food_input.food_text, 
+            user_profile.addiction_type,
+            food_input.meal_type
+        )
+        
+        # Step 2: Get nutritional needs for this user
+        recovery_needs = nutrition_calculator.get_addiction_specific_needs(user_profile)
+        
+        # Step 3: Analyze current intake
+        current_intake = nutrition_calculator.analyze_food_intake(parsed_data["foods"])
+        
+        # Step 4: Calculate deficiencies
+        deficiencies = {}
+        for nutrient, needed in recovery_needs.items():
+            current = current_intake.get(nutrient, 0)
+            if current < needed * 0.8:  # Less than 80% of requirement
+                deficiencies[nutrient] = {
+                    "current": current,
+                    "needed": needed,
+                    "deficit": needed - current,
+                    "percentage_met": round((current / needed) * 100, 1) if needed > 0 else 0,
+                    "severity": "critical" if current < needed * 0.5 else "moderate"
+                }
+        
+        # Step 5: Calculate recovery score
+        total_nutrients = len(recovery_needs)
+        met_nutrients = sum(1 for nutrient in recovery_needs if current_intake.get(nutrient, 0) >= recovery_needs[nutrient] * 0.8)
+        recovery_score = (met_nutrients / total_nutrients) * 100 if total_nutrients > 0 else 0
+        
+        # Step 6: Generate recommendations
+        personalized_recommendations = gemini_client.generate_personalized_recommendations(
+            {"deficiencies": deficiencies, "current_intake": current_intake},
+            user_profile
+        )
+        
+        # Step 7: Prepare response
+        nutrition_analysis = {
+            "daily_totals": current_intake,
+            "recovery_needs": recovery_needs,
+            "deficiencies": deficiencies,
+            "parsed_foods": parsed_data["foods"],
+            "emotional_context": parsed_data.get("emotional_context")
+        }
+        
+        addiction_insights = {
+            "addiction_type": user_profile.addiction_type,
+            "recovery_stage": user_profile.recovery_stage,
+            "key_deficiencies": list(deficiencies.keys()),
+            "eating_pattern": parsed_data.get("eating_pattern"),
+            "priority_nutrients": ADDICTION_REQUIREMENTS.get(user_profile.addiction_type, {}).get("key_nutrients", [])
+        }
+        
+        recommendations = {
+            "personalized_guidance": personalized_recommendations,
+            "immediate_actions": _generate_immediate_actions(deficiencies),
+            "meal_timing_advice": _get_meal_timing_advice(user_profile.addiction_type)
+        }
+        
+        return NutritionResponse(
+            nutrition_analysis=nutrition_analysis,
+            addiction_specific_insights=addiction_insights,
+            recommendations=recommendations,
+            recovery_score=round(recovery_score, 1)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+def _generate_immediate_actions(deficiencies: Dict) -> List[str]:
+    """Generate immediate action items based on deficiencies"""
+    actions = []
+    
+    if "thiamine" in deficiencies:
+        actions.append("Add fortified cereal or sunflower seeds to next meal")
+    if "magnesium" in deficiencies:
+        actions.append("Include handful of almonds or dark chocolate as snack")
+    if "protein" in deficiencies:
+        actions.append("Add Greek yogurt, chicken, or beans to meals")
+    if "fiber" in deficiencies:
+        actions.append("Choose whole grains and add vegetables to meals")
+    
+    return actions
+
+def _get_meal_timing_advice(addiction_type: str) -> str:
+    """Get meal timing advice specific to addiction type"""
+    advice = {
+        "alcohol": "Eat every 3-4 hours to maintain stable blood sugar and support liver recovery",
+        "opioids": "Regular meal schedule helps restore normal digestive function",
+        "stimulants": "Frequent small meals (every 2-3 hours) help maintain energy and prevent crashes",
+        "marijuana": "Structured meal times help regulate appetite that may be disrupted"
+    }
+    return advice.get(addiction_type, "Maintain regular meal schedule for recovery support")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "Nutrition Tracker API"}
+
+@app.post("/user-profile")
+async def create_user_profile(profile: UserProfile):
+    """Create or update user profile"""
+    # In a real app, you'd save this to a database
+    return {"message": "Profile saved successfully", "user_id": profile.user_id}
+
+# Run the app

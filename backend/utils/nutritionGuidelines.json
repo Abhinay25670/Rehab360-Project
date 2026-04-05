@@ -1,0 +1,178 @@
+{
+  "Alcohol": {
+    "18-40": {
+      "summary": "Focus on restoring B-vitamin status (especially thiamine), ensuring adequate protein and energy intake, and supporting liver health. Avoid further liver toxins.",
+      "do": [
+        "Include whole grains, legumes, nuts, and seeds to increase thiamine (vitamin B1) intake.",
+        "Eat lean protein sources (pulses, eggs, poultry, fish) to support liver regeneration and muscle mass.",
+        "Emphasise fruits and vegetables rich in antioxidants (citrus fruits, berries, green leafy vegetables).",
+        "Drink adequate water throughout the day unless your doctor advises fluid restriction."
+      ],
+      "dont": [
+        "Avoid alcohol completely, including 'small amounts' or 'social drinking'.",
+        "Limit highly processed foods high in sugar and saturated fat that worsen fatty liver.",
+        "Avoid herbal supplements claiming to 'detox the liver' without medical supervision."
+      ],
+      "sources": [
+        {
+          "name": "NIAAA – Helping Patients Who Drink Too Much (Clinician's Guide)",
+          "url": "https://www.niaaa.nih.gov/health-professionals-communities/core-resource-on-alcohol"
+        },
+        {
+          "name": "NIH MedlinePlus – Alcohol Use Disorder and Nutrition",
+          "url": "https://medlineplus.gov/alcoholism.html"
+        }
+      ]
+    },
+    "41-65": {
+      "summary": "Older adults recovering from alcohol use disorder need careful attention to B-vitamins, bone health (calcium/vitamin D), and managing comorbidities like diabetes or hypertension.",
+      "do": [
+        "Ensure adequate thiamine (B1) and other B-vitamins through fortified cereals, whole grains, and lean meats.",
+        "Include calcium-rich foods (dairy, fortified plant milks, leafy greens) and vitamin D sources (fatty fish, fortified foods).",
+        "Maintain consistent meal timing to support blood sugar stability.",
+        "Stay hydrated, but monitor fluid intake if there are heart or kidney concerns."
+      ],
+      "dont": [
+        "Avoid alcohol completely.",
+        "Don't skip meals, which can worsen blood sugar fluctuations.",
+        "Avoid excessive sodium if managing hypertension."
+      ],
+      "sources": [
+        {
+          "name": "NIAAA – Alcohol and Older Adults",
+          "url": "https://www.niaaa.nih.gov/alcohols-effects-health/alcohol-topics/older-adults"
+        }
+      ]
+    }
+  },
+  "Nicotine": {
+    "18-40": {
+      "summary": "Nicotine withdrawal can affect appetite and metabolism. Focus on balanced meals, managing cravings with healthy snacks, and supporting cardiovascular health.",
+      "do": [
+        "Eat regular, balanced meals to stabilize blood sugar and reduce cravings.",
+        "Include fiber-rich foods (whole grains, fruits, vegetables) to support digestive health.",
+        "Stay hydrated with water; avoid excessive caffeine which can worsen anxiety.",
+        "Include antioxidant-rich foods (berries, leafy greens, nuts) to support recovery."
+      ],
+      "dont": [
+        "Don't replace smoking with excessive caffeine or sugary snacks.",
+        "Avoid skipping meals, which can trigger cravings.",
+        "Limit highly processed foods that can contribute to inflammation."
+      ],
+      "sources": [
+        {
+          "name": "CDC – Benefits of Quitting Smoking",
+          "url": "https://www.cdc.gov/tobacco/about/benefits-of-quitting.html"
+        },
+        {
+          "name": "American Heart Association – Nutrition and Smoking Cessation",
+          "url": "https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/nutrition-basics"
+        }
+      ]
+    },
+    "41-65": {
+      "summary": "Older adults quitting nicotine should focus on cardiovascular health, maintaining muscle mass, and managing metabolic changes.",
+      "do": [
+        "Emphasize heart-healthy fats (olive oil, avocados, nuts) and lean proteins.",
+        "Include plenty of fruits and vegetables for antioxidants and fiber.",
+        "Maintain consistent meal timing to support metabolism.",
+        "Consider smaller, more frequent meals if appetite changes."
+      ],
+      "dont": [
+        "Avoid excessive weight gain by choosing nutrient-dense snacks over empty calories.",
+        "Don't replace smoking with excessive alcohol or caffeine."
+      ],
+      "sources": [
+        {
+          "name": "CDC – Benefits of Quitting Smoking",
+          "url": "https://www.cdc.gov/tobacco/about/benefits-of-quitting.html"
+        }
+      ]
+    }
+  },
+  "Opioids": {
+    "18-40": {
+      "summary": "Opioid recovery requires attention to digestive health (constipation is common), restoring normal appetite, and supporting overall nutritional status.",
+      "do": [
+        "Include high-fiber foods (whole grains, legumes, fruits, vegetables) to address constipation.",
+        "Eat regular meals to restore normal eating patterns disrupted by opioid use.",
+        "Include probiotic-rich foods (yogurt, fermented foods) to support gut health.",
+        "Stay well-hydrated to support digestive function."
+      ],
+      "dont": [
+        "Avoid excessive processed foods that can worsen digestive issues.",
+        "Don't skip meals, which can affect mood and energy levels.",
+        "Avoid excessive sugar, which can contribute to mood swings."
+      ],
+      "sources": [
+        {
+          "name": "SAMHSA – Medication-Assisted Treatment",
+          "url": "https://www.samhsa.gov/medications-substance-use-disorders/medications-counseling-related-conditions"
+        },
+        {
+          "name": "NIDA – Opioid Use Disorder Treatment",
+          "url": "https://nida.nih.gov/nidamed-medical-health-professionals/treatment/opioid-use-disorder-treatment"
+        }
+      ]
+    },
+    "41-65": {
+      "summary": "Older adults in opioid recovery need careful attention to digestive health, bone health, and managing comorbidities.",
+      "do": [
+        "Prioritize fiber-rich foods to manage constipation common with opioids.",
+        "Include calcium and vitamin D sources for bone health.",
+        "Eat regular, balanced meals to support stable blood sugar and energy.",
+        "Stay hydrated, but monitor fluid intake if there are kidney concerns."
+      ],
+      "dont": [
+        "Avoid excessive processed foods.",
+        "Don't ignore digestive symptoms; consult a doctor if persistent."
+      ],
+      "sources": [
+        {
+          "name": "SAMHSA – Medication-Assisted Treatment",
+          "url": "https://www.samhsa.gov/medications-substance-use-disorders/medications-counseling-related-conditions"
+        }
+      ]
+    }
+  },
+  "Cannabis": {
+    "18-40": {
+      "summary": "Cannabis recovery focuses on restoring normal appetite patterns, supporting mental health through nutrition, and maintaining energy levels.",
+      "do": [
+        "Eat regular, balanced meals even if appetite is reduced initially.",
+        "Include omega-3 rich foods (fatty fish, walnuts, flaxseeds) which may support mood.",
+        "Emphasize whole foods over processed snacks.",
+        "Stay hydrated and maintain consistent meal timing."
+      ],
+      "dont": [
+        "Don't replace cannabis use with excessive caffeine or energy drinks.",
+        "Avoid skipping meals, which can affect mood and energy.",
+        "Limit highly processed foods that can contribute to inflammation."
+      ],
+      "sources": [
+        {
+          "name": "NIDA – Cannabis (Marijuana) Research Report",
+          "url": "https://nida.nih.gov/research-topics/cannabis-marijuana"
+        }
+      ]
+    },
+    "41-65": {
+      "summary": "Older adults recovering from cannabis use should focus on maintaining healthy eating patterns and supporting overall wellness.",
+      "do": [
+        "Maintain regular meal timing to support metabolism and energy.",
+        "Include nutrient-dense foods to meet nutritional needs.",
+        "Stay hydrated and include fiber-rich foods for digestive health."
+      ],
+      "dont": [
+        "Avoid replacing cannabis with other substances or excessive caffeine.",
+        "Don't skip meals."
+      ],
+      "sources": [
+        {
+          "name": "NIDA – Cannabis Research Report",
+          "url": "https://nida.nih.gov/research-topics/cannabis-marijuana"
+        }
+      ]
+    }
+  }
+}

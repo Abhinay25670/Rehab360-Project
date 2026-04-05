@@ -1,0 +1,51 @@
+{
+  "daily_morning": {
+    "gentle": [
+      "Good morning, {name}! \ud83c\udf05 Today marks {days_sober} days of your healing journey. {strength_reminder} {today_context} Take it one moment at a time. {personal_goal}",
+      "Rise and shine, {name}! \u2600\ufe0f Another day to celebrate - {days_sober} days of choosing yourself. {progress_highlight} {encouragement} You've got this!",
+      "Morning, {name}! \ud83c\udf38 {days_sober} days of growth and courage. {recent_success} {gentle_reminder} Today is full of possibilities."
+    ],
+    "motivational": [
+      "GOOD MORNING, CHAMPION! \ud83d\udcaa {name}, you've conquered {days_sober} days and you're not stopping now! {achievement_focus} {challenge_framing} {power_statement}",
+      "Rise up, {name}! \ud83d\udd25 Day {days_sober} of your comeback story. {strength_evidence} {today_opportunity} Make today count!",
+      "Morning warrior, {name}! \u26a1 {days_sober} days of pure determination. {victory_reminder} {challenge_ready} You're unstoppable!"
+    ],
+    "balanced": [
+      "Good morning, {name}! \ud83c\udf04 {days_sober} days into your recovery - that's real progress. {realistic_encouragement} {today_forecast} {balanced_goal}",
+      "Morning, {name}! \ud83c\udf31 Another day, another opportunity. You're {days_sober} days strong. {honest_progress} {practical_focus} {steady_encouragement}",
+      "Hey {name}! \ud83d\udc4b Day {days_sober} of this journey. {progress_acknowledgment} {today_reality} {forward_focus}"
+    ]
+  },
+  "milestone_celebration": {
+    "weekly": [
+      "\ud83c\udf89 WEEK COMPLETE! {name}, you've just finished another week of recovery! {week_highlights} {data_progress} {next_week_motivation}",
+      "Seven more days in the books, {name}! \ud83d\udcda {weekly_achievement} {growth_evidence} {momentum_building}",
+      "Another week conquered, {name}! \ud83c\udfc6 {week_summary} {strength_building} {week_ahead_prep}"
+    ],
+    "monthly": [
+      "\ud83c\udf8a MONTHLY MILESTONE REACHED! {name}, a whole month of recovery progress! {monthly_transformation} {data_celebration} {future_vision}",
+      "One month milestone unlocked, {name}! \ud83d\udd13 {month_journey} {achievement_analysis} {next_month_goals}",
+      "30 days of victory, {name}! \ud83c\udfc5 {monthly_highlights} {personal_growth} {momentum_forward}"
+    ],
+    "major": [
+      "\ud83c\udf1f MAJOR MILESTONE ALERT! {name}, you've reached {milestone_days} days! {epic_achievement} {transformation_story} {legacy_building}",
+      "INCREDIBLE MILESTONE, {name}! \ud83c\udf86 {milestone_days} days of pure determination! {journey_reflection} {impact_recognition} {future_possibilities}",
+      "{milestone_days} DAYS OF FREEDOM! {name}, this is legendary! {milestone_celebration} {life_transformation} {inspiration_to_others}"
+    ]
+  },
+  "crisis_support": [
+    "Hey {name}, I know things feel overwhelming right now. {crisis_validation} But remember - you've overcome {past_challenges}. {immediate_support} {specific_action}",
+    "{name}, this tough moment doesn't define you. {strength_reminder} You've used {effective_technique} successfully {success_count} times. {calming_guidance} {next_step}",
+    "Breathe, {name}. {crisis_acknowledgment} Your {proven_strength} has carried you {days_sober} days. {immediate_tool} {support_reminder}"
+  ],
+  "progress_celebration": [
+    "Progress alert, {name}! \ud83d\udcc8 {specific_improvement} over the past {time_period}. {data_celebration} {growth_recognition} {momentum_encouragement}",
+    "Look at you go, {name}! \ud83d\ude80 {progress_metric} shows real improvement. {achievement_context} {skill_recognition} {forward_momentum}",
+    "Amazing progress, {name}! \u2728 {improvement_details} {personal_growth} {confidence_building} {next_level_prep}"
+  ],
+  "evening_reflection": [
+    "Evening, {name}! \ud83c\udf19 Day {days_sober} is almost complete. {day_acknowledgment} {evening_reflection} {tomorrow_prep} Rest well.",
+    "Another day conquered, {name}! \ud83c\udf06 {daily_victory} {evening_gratitude} {peaceful_closure} Sweet dreams.",
+    "End of day check-in, {name}! \ud83c\udf03 {day_summary} {evening_wisdom} {tomorrow_hope} Sleep peacefully."
+  ]
+}

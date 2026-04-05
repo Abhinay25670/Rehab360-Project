@@ -1,0 +1,8 @@
+<svg width="400" height="100" xmlns="http://www.w3.org/2000/svg">
+  <!-- "AYAL" text in bold dark green -->
+  <text x="50" y="60" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="green">AYAL</text>
+
+
+  <!-- Tagline in black and smaller font -->
+  <text x="50" y= "85" font-family="Courier New, monospace" font-size="15" font-weight="bold" fill="black">Your Neighbourhood Assistance Hub</text>
+</svg>

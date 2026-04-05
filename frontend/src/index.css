@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@layer components {
+    .dropdown-item {
+      @apply flex items-center gap-2 px-4 py-2 hover:bg-gray-200 transition-all w-full;
+    }
+    
+    .mobile-nav-item {
+      @apply flex items-center gap-2 px-6 py-3 border-b border-gray-500 text-white hover:bg-gray-700 transition-all w-full;
+    }
+  }

@@ -1,0 +1,31 @@
+# Craving Intensity Forecasting API Requirements
+
+# Core FastAPI framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.4.2
+
+# Time Series Analysis and Forecasting
+pmdarima==2.0.4
+statsmodels==0.14.0
+scipy==1.11.4
+
+# Data Processing
+pandas==2.0.3
+numpy==1.24.3
+
+# HTTP requests for testing
+requests==2.31.0
+
+# Optional: For production deployment
+gunicorn==21.2.0
+
+# Optional: Enhanced validation
+email-validator==2.1.0
+
+# Optional: For API documentation enhancement
+python-multipart==0.0.6
+
+# Note: If installation fails, install these individually:
+# pip install pmdarima --no-deps  # For ARM-based systems
+# pip install statsmodels --upgrade  # For newer versions

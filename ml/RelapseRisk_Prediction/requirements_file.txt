@@ -1,0 +1,24 @@
+# Relapse Risk Prediction API Requirements
+
+# FastAPI and web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.4.2
+
+# Machine Learning and Data Processing
+scikit-learn==1.3.2
+numpy==1.24.3
+pandas==2.0.3
+scipy==1.11.4
+
+# HTTP requests for testing
+requests==2.31.0
+
+# Optional: For production deployment
+gunicorn==21.2.0
+
+# Optional: For enhanced validation
+email-validator==2.1.0
+
+# Optional: For API documentation
+python-multipart==0.0.6
