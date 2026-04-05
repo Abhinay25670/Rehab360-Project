@@ -96,10 +96,10 @@ uploads/
 ml/chat_data/
 **/chat_data/
 
-# Backend tooling artifacts & local data
+# Backend tooling artifacts
 backend/*.tgz
 backend/ngrok*
-backend/data/
+# Note: backend/data/*.json is committed (rehab centers, meetings) — required at runtime on Render
 
 # Local tooling binaries
 tools/
