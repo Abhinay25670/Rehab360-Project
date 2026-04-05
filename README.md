@@ -2,8 +2,6 @@
 
 Full-stack platform for addiction recovery support: **resident dashboards**, **guardian workflows**, **doctor scheduling**, **community chat** (Socket.IO), **email/SMS alerts**, scheduled reports, and optional **Python ML** services (chatbot, assessments).
 
-**Live repo:** [github.com/Abhinay25670/Rehab360-Project](https://github.com/Abhinay25670/Rehab360-Project)
-
 ---
 
 ## Features
@@ -194,8 +192,3 @@ If the apex record is problematic, use **`www` as canonical** and redirect apex 
 - **Clerk redirect issues** — Add every environment URL (local + prod) to Clerk’s allowed origins and redirect URLs.  
 - **ML features offline** — Deploy `ml/` separately and set `VITE_ML_API_URL`; ensure `CRAVING_API_URL` inside ML points to the correct internal craving service path (e.g. `/enhanced_craving_api`), not localhost in production.
 
----
-
-## Contributing
-
-Issues and pull requests are welcome. Please keep changes focused and match existing code style.
