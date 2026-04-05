@@ -1,11 +1,4 @@
-# CSD-2025-26-BATCH-A-03 — Rehab360 (Rehabilitation Management)
-
-**Course / batch repository** for the Rehab360 platform — a full-stack application for addiction recovery support.
-
-**Related upstream (deployment-ready reference):** [github.com/Abhinay25670/Rehab360-Project](https://github.com/Abhinay25670/Rehab360-Project)
-
-**Live site:** [rehablabs.in](https://rehablabs.in)
-
+#Rehab360 (Rehabilitation Management)
 ---
 
 ## About the project
