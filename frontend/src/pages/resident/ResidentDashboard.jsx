@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import BrandLogo from '../../components/BrandLogo';
 import { 
   FaUser, 
   FaRobot,
@@ -1338,8 +1339,8 @@ const GuardianDashboard = () => {
             {sidebarOpen ? <FaTimes className={theme.textSecondary} /> : <FaBars className={theme.textSecondary} />}
           </button>
           <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 ${darkMode ? 'bg-zinc-100' : 'bg-zinc-900'} rounded-lg flex items-center justify-center`}>
-              <FaBrain className={darkMode ? 'text-zinc-900' : 'text-white'} />
+            <div className={`w-8 h-8 ${darkMode ? 'bg-zinc-100' : 'bg-zinc-900'} rounded-lg flex items-center justify-center overflow-hidden`}>
+              <BrandLogo variant={darkMode ? 'onLight' : 'onDark'} size="sm" />
             </div>
             <span className={`font-semibold ${theme.text} hidden sm:block`}>{t('sidebar.guardianDashboard')}</span>
           </div>

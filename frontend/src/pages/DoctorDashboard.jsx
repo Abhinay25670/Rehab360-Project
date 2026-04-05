@@ -21,7 +21,6 @@ import {
   FaBars,
   FaClipboardList,
   FaHeartbeat,
-  FaBrain,
   FaCalendarAlt,
   FaEnvelope,
   FaPhone,
@@ -30,6 +29,7 @@ import {
   FaCog
 } from 'react-icons/fa';
 import { API_BASE_URL } from '../config/api';
+import BrandLogo from '../components/BrandLogo';
 
 const DoctorDashboard = () => {
   const { user, isLoaded } = useUser();
@@ -307,6 +307,9 @@ const DoctorDashboard = () => {
             <FaBars className={theme.textMuted} />
           </button>
           <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden ${darkMode ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+              <BrandLogo variant={darkMode ? 'onLight' : 'onDark'} size="sm" />
+            </div>
             <FaUserMd className="text-blue-600 text-xl" />
             <span className={`font-semibold ${theme.text}`}>Doctor Dashboard</span>
           </div>

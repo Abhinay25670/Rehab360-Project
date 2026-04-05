@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FaUserCircle, FaSignOutAlt, FaHome, FaTools, FaClipboardList, FaUsersCog, FaUsers, FaBars, FaTimes, FaServer, FaStopCircle, FaStreetView, FaRadiationAlt, FaChartLine } from "react-icons/fa";
 import { CiChat1 } from "react-icons/ci";
 import { API_URL } from "../config/api";
+import BrandLogo from "./BrandLogo";
 
 const Navbar = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -44,7 +45,12 @@ const Navbar = () => {
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         } `}
       >
-        <h1 className="text-3xl text-center font-bold text-sky-800 mb-8">AYAL</h1>
+        <div className="flex flex-col items-center gap-2 mb-8">
+          <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-sky-800/10 overflow-hidden">
+            <BrandLogo variant="onLight" size="lg" className="h-10 w-10" />
+          </div>
+          <h1 className="text-2xl text-center font-bold text-sky-800">Rehab360</h1>
+        </div>
 
         {/* User Info */}
         <div className="w-full flex items-center justify-start gap-3 text-sky-800 mb-6">

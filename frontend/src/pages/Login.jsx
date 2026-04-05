@@ -1,6 +1,6 @@
 import { SignIn } from "@clerk/clerk-react";
 import { Link } from "react-router-dom";
-import { FaBrain } from "react-icons/fa";
+import BrandLogo from "../components/BrandLogo";
 
 const Login = () => {
   return (
@@ -8,10 +8,10 @@ const Login = () => {
       {/* Header */}
       <header className="p-4">
         <Link to="/" className="inline-flex items-center gap-2">
-          <div className="w-9 h-9 bg-zinc-900 rounded-lg flex items-center justify-center">
-            <FaBrain className="text-white" />
+          <div className="w-9 h-9 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden">
+            <BrandLogo variant="onDark" size="md" />
           </div>
-          <span className="font-semibold text-lg text-zinc-900">Rehab</span>
+          <span className="font-semibold text-lg text-zinc-900">Rehab360</span>
         </Link>
       </header>
 

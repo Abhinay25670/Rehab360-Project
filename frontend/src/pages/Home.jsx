@@ -29,6 +29,7 @@ import {
 } from "@clerk/clerk-react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGUAGES, changeLanguage } from "../i18n";
+import BrandLogo from "../components/BrandLogo";
 
 const HomePage = () => {
   const { t, i18n } = useTranslation();
@@ -103,10 +104,10 @@ const HomePage = () => {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${scrolled ? 'bg-zinc-900' : 'bg-white'}`}>
-                <FaBrain className={scrolled ? 'text-white' : 'text-zinc-900'} />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden ${scrolled ? 'bg-zinc-900' : 'bg-white'}`}>
+                <BrandLogo variant={scrolled ? "onDark" : "onLight"} size="md" />
               </div>
-              <span className={`font-semibold text-lg ${scrolled ? 'text-zinc-900' : 'text-white'}`}>Rehab</span>
+              <span className={`font-semibold text-lg ${scrolled ? 'text-zinc-900' : 'text-white'}`}>Rehab360</span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -487,10 +488,10 @@ const HomePage = () => {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <FaBrain className="text-zinc-900" />
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                <BrandLogo variant="onLight" size="sm" />
               </div>
-              <span className="font-semibold text-white">Rehab</span>
+              <span className="font-semibold text-white">Rehab360</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-zinc-500">
               <a href="#features" className="hover:text-white transition-colors">{t('nav.features')}</a>

@@ -14,7 +14,6 @@ import {
   FaBell,
   FaExclamationTriangle,
   FaCalendarAlt,
-  FaBrain,
   FaHeartbeat,
   FaMoon,
   FaSun,
@@ -27,6 +26,7 @@ import {
 } from 'react-icons/fa';
 
 import { API_BASE_URL } from '../config/api';
+import BrandLogo from '../components/BrandLogo';
 
 const Onboarding = () => {
   const navigate = useNavigate();
@@ -344,10 +344,10 @@ const Onboarding = () => {
       <header className="bg-white border-b border-zinc-200">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-zinc-900 rounded-lg flex items-center justify-center">
-              <FaBrain className="text-white" />
+            <div className="w-9 h-9 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden">
+              <BrandLogo variant="onDark" size="md" />
             </div>
-            <span className="font-semibold text-lg text-zinc-900">Rehab</span>
+            <span className="font-semibold text-lg text-zinc-900">Rehab360</span>
           </div>
         </div>
       </header>

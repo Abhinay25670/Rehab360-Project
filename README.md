@@ -111,6 +111,35 @@ Use a **static host** for the SPA and a **Node host** for the API. Example: **Ve
 
 **Note:** Free dynos may spin down when idle (cold start). Optional `ml/` services need a separate Python deployment or run locally.
 
+### Custom domain on Hostinger (`rehablabs.in`) at zero extra hosting cost
+
+Your **domain** can live at Hostinger while the **app** runs on free tiers. You only pay for the domain renewal you already have; you do **not** need Hostinger’s Node hosting for this stack—use Hostinger’s **DNS** (hPanel → Domains → `rehablabs.in` → **DNS / Nameservers** → **DNS records**) to point to free providers.
+
+**Recommended layout**
+
+| Hostname | Points to | Purpose |
+|----------|-------------|---------|
+| `rehablabs.in` (apex) | Your static host (Vercel / Cloudflare Pages) | React app |
+| `www.rehablabs.in` | Same (CNAME to `cname.vercel-dns.com` or your host’s target) | React app |
+| `api.rehablabs.in` | Your Node host (Render, etc.) | API + Socket.IO |
+
+**Order of operations**
+
+1. Deploy **backend** on Render (free). Note the default URL `https://<name>.onrender.com`. In Render: **Settings → Custom domains → Add** → `api.rehablabs.in`. Render will show a **CNAME** target (e.g. `<something>.onrender.com`). Add that CNAME in Hostinger: **Name** `api`, **Type** CNAME, **Target** as Render instructs. Wait for SSL to show “verified.”
+2. Deploy **frontend** on Vercel (free). Add domains **rehablabs.in** and **www.rehablabs.in** in Vercel **Project → Settings → Domains**. Vercel will tell you to add **A** records for the apex and/or **CNAME** for `www`—copy those values into Hostinger DNS exactly.
+3. Set **frontend** env in Vercel:  
+   `VITE_API_URL=https://api.rehablabs.in`  
+   `VITE_CLERK_PUBLISHABLE_KEY=...`  
+   Redeploy the frontend after saving.
+4. Set **backend** env on Render:  
+   `FRONTEND_URL=https://rehablabs.in,https://www.rehablabs.in`  
+   (comma-separated so both apex and `www` work with CORS.) Redeploy the backend.
+5. **Clerk:** [Dashboard](https://dashboard.clerk.com) → your app → **Domains / Allowed origins** → add `https://rehablabs.in` and `https://www.rehablabs.in` (and keep `http://localhost:5173` for local dev).
+
+**Apex domain note:** Some registrars make the root domain (`rehablabs.in`) easier with **Vercel** (they give you the exact A/ALIAS records). If the apex is stubborn, use **`www.rehablabs.in` as the primary** URL and add a redirect from apex → `www` in Vercel or Hostinger.
+
+**What stays free:** MongoDB Atlas M0, Clerk dev/free tier limits, Vercel Hobby, Render free web service (with idle spin-down). **Costs:** domain renewal only; no requirement to buy Hostinger “Premium Hosting” for this architecture.
+
 ## License
 
 MIT
