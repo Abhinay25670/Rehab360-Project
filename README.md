@@ -73,8 +73,8 @@ This batch repo mirrors that architecture so coursework, demos, and reports can 
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/MeghanaMahendrakar/CSD-2025-26-Batch-A-03.git
-cd CSD-2025-26-Batch-A-03
+git clone https://github.com/Abhinay25670/Rehab360-Project.git
+cd Rehab360-Project
 
 cd backend && npm install
 cd ../frontend && npm install
